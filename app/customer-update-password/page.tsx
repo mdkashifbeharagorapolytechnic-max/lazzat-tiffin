@@ -1,0 +1,204 @@
+"use client";
+
+import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
+import { supabase } from "@/lib/supabase";
+
+export default function CustomerUpdatePasswordPage() {
+  const router = useRouter();
+
+  const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] =
+    useState("");
+
+  const [ready, setReady] = useState(false);
+  const [loading, setLoading] = useState(false);
+
+  const [error, setError] = useState("");
+  const [message, setMessage] = useState("");
+
+  useEffect(() => {
+    let mounted = true;
+
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange(
+      (event, session) => {
+        if (
+          !mounted
+        ) {
+          return;
+        }
+
+        if (
+          event === "PASSWORD_RECOVERY" ||
+          session
+        ) {
+          setReady(true);
+        }
+      }
+    );
+
+    supabase.auth.getSession().then(({ data }) => {
+      if (!mounted) return;
+
+      if (data.session) {
+        setReady(true);
+      }
+    });
+
+    return () => {
+      mounted = false;
+      subscription.unsubscribe();
+    };
+  }, []);
+
+  async function handleSubmit(
+    e: React.FormEvent<HTMLFormElement>
+  ) {
+    e.preventDefault();
+
+    if (loading) return;
+
+    setError("");
+    setMessage("");
+
+    if (password.length < 6) {
+      setError(
+        "Password must be at least 6 characters."
+      );
+      return;
+    }
+
+    if (password !== confirmPassword) {
+      setError("Passwords do not match.");
+      return;
+    }
+
+    setLoading(true);
+
+    const { error } =
+      await supabase.auth.updateUser({
+        password,
+      });
+
+    if (error) {
+      console.error(error);
+      setError(error.message);
+      setLoading(false);
+      return;
+    }
+
+    setMessage(
+      "Password updated successfully. Redirecting to customer login..."
+    );
+
+    setPassword("");
+    setConfirmPassword("");
+
+    setTimeout(() => {
+      router.replace("/customer-login");
+    }, 1500);
+
+    setLoading(false);
+  }
+
+  if (!ready) {
+    return (
+      <main className="flex min-h-screen items-center justify-center bg-gray-100 px-4">
+        <div className="w-full max-w-md rounded-2xl bg-white p-8 text-center shadow-xl">
+          <h1 className="text-xl font-bold text-gray-900">
+            Verifying Reset Link
+          </h1>
+
+          <p className="mt-3 text-sm leading-6 text-gray-500">
+            Please wait while we verify your password
+            reset link.
+          </p>
+        </div>
+      </main>
+    );
+  }
+
+  return (
+    <main className="flex min-h-screen items-center justify-center bg-gray-100 px-4 py-8">
+      <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl md:p-8">
+        <div className="text-center">
+          <h1 className="text-2xl font-bold text-gray-900">
+            Set New Password
+          </h1>
+
+          <p className="mt-2 text-sm text-gray-500">
+            Create a new password for your Lazzat Tiffin
+            account.
+          </p>
+        </div>
+
+        {error && (
+          <div className="mt-6 rounded-xl border border-red-200 bg-red-50 p-4 text-sm leading-6 text-red-700">
+            {error}
+          </div>
+        )}
+
+        {message && (
+          <div className="mt-6 rounded-xl border border-green-200 bg-green-50 p-4 text-sm leading-6 text-green-700">
+            {message}
+          </div>
+        )}
+
+        <form
+          onSubmit={handleSubmit}
+          className="mt-6 space-y-5"
+        >
+          <div>
+            <label className="mb-2 block text-sm font-semibold text-gray-700">
+              New Password
+            </label>
+
+            <input
+              type="password"
+              value={password}
+              onChange={(e) => {
+                setPassword(e.target.value);
+                setError("");
+              }}
+              placeholder="Enter new password"
+              autoComplete="new-password"
+              required
+              className="w-full rounded-xl border border-gray-300 px-4 py-3 outline-none focus:border-green-500 focus:ring-2 focus:ring-green-100"
+            />
+          </div>
+
+          <div>
+            <label className="mb-2 block text-sm font-semibold text-gray-700">
+              Confirm New Password
+            </label>
+
+            <input
+              type="password"
+              value={confirmPassword}
+              onChange={(e) => {
+                setConfirmPassword(e.target.value);
+                setError("");
+              }}
+              placeholder="Confirm new password"
+              autoComplete="new-password"
+              required
+              className="w-full rounded-xl border border-gray-300 px-4 py-3 outline-none focus:border-green-500 focus:ring-2 focus:ring-green-100"
+            />
+          </div>
+
+          <button
+            type="submit"
+            disabled={loading}
+            className="w-full rounded-xl bg-green-600 px-5 py-4 font-bold text-white hover:bg-green-700 disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            {loading
+              ? "Updating..."
+              : "Update Password"}
+          </button>
+        </form>
+      </div>
+    </main>
+  );
+}
