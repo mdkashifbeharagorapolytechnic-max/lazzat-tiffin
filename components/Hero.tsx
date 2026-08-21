@@ -6,8 +6,8 @@ import Link from "next/link";
 export default function Hero() {
   return (
     <section className="relative overflow-hidden bg-gradient-to-br from-orange-50 via-white to-green-50">
-      <div className="mx-auto max-w-7xl px-6 py-20 md:py-28">
-        <div className="grid items-center gap-12 lg:grid-cols-2">
+      <div className="mx-auto max-w-7xl px-4 py-12 sm:px-6 sm:py-20 md:py-28">
+        <div className="grid items-center gap-10 lg:grid-cols-2 lg:gap-12">
 
           {/* LEFT CONTENT */}
           <motion.div
@@ -46,7 +46,7 @@ export default function Hero() {
               </Link>
 
               <Link
-                href="#contact"
+                href="/request"
                 className="rounded-xl border-2 border-green-600 bg-white px-7 py-3.5 text-center font-bold text-green-700 transition hover:bg-green-50"
               >
                 Order Now
@@ -54,7 +54,7 @@ export default function Hero() {
             </div>
 
             {/* FEATURES */}
-            <div className="mt-10 grid grid-cols-3 gap-4 border-t border-gray-200 pt-7">
+            <div className="mt-10 grid grid-cols-3 gap-3 border-t border-gray-200 pt-7 sm:gap-4">
 
               {/* HOMEMADE */}
               <div>
@@ -112,7 +112,7 @@ export default function Hero() {
               duration: 0.9,
               delay: 0.15,
             }}
-            className="relative pb-8"
+            className="relative"
           >
 
             {/* DECORATIVE CIRCLES */}
@@ -120,7 +120,7 @@ export default function Hero() {
 
             <div className="absolute -bottom-8 -left-8 h-32 w-32 rounded-full bg-green-200 opacity-60 blur-2xl" />
 
-            {/* IMAGE CARD */}
+            {/* IMAGE */}
             <motion.div
               whileHover={{
                 y: -8,
@@ -128,81 +128,53 @@ export default function Hero() {
               transition={{
                 duration: 0.3,
               }}
-              className="relative overflow-hidden rounded-[2rem] bg-white shadow-2xl"
+              className="relative rounded-[2rem] bg-white p-2 shadow-2xl sm:p-4"
             >
 
               <img
                 src="https://images.pexels.com/photos/1640777/pexels-photo-1640777.jpeg?auto=compress&cs=tinysrgb&w=1200"
                 alt="Indian kitchen with freshly prepared homemade food"
-                className="h-[420px] w-full object-cover sm:h-[500px]"
+                className="h-auto max-h-[520px] w-full rounded-[1.5rem] object-contain sm:max-h-[600px]"
               />
-
-              {/* IMAGE OVERLAY */}
-              <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent p-6">
-
-                <div className="rounded-2xl bg-white/95 p-4 shadow-lg backdrop-blur-sm">
-
-                  <div className="flex items-center justify-between gap-4">
-
-                    <div>
-                      <p className="text-sm font-semibold text-orange-600">
-                        Lazzat Tiffin
-                      </p>
-
-                      <h3 className="mt-1 text-xl font-bold text-gray-900">
-                        Ghar Jaisa Khana ❤️
-                      </h3>
-
-                      <p className="mt-1 text-sm text-gray-500">
-                        Freshly prepared every day
-                      </p>
-                    </div>
-
-                    {/* FOOD ICON */}
-                    <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-orange-100 text-2xl">
-                      🍛
-                    </div>
-
-                  </div>
-
-                </div>
-              </div>
 
             </motion.div>
 
-            {/* FRESH & HOMEMADE NOTE */}
+            {/* GHAR JAISA KHANA - PHOTO KE NEECHE */}
             <motion.div
               initial={{
                 opacity: 0,
-                scale: 0.8,
+                y: 15,
               }}
               animate={{
                 opacity: 1,
-                scale: 1,
+                y: 0,
               }}
               transition={{
                 duration: 0.5,
-                delay: 0.8,
+                delay: 0.6,
               }}
-              className="absolute -bottom-3 -left-4 rounded-2xl bg-white px-5 py-4 shadow-xl sm:-left-6"
+              className="relative mt-4 rounded-2xl bg-white p-4 shadow-xl sm:p-5"
             >
 
-              <div className="flex items-center gap-3">
+              <div className="flex items-center justify-between gap-4">
 
-                {/* CHECK ICON */}
-                <div className="flex h-11 w-11 items-center justify-center rounded-full bg-green-100 text-xl">
-                  ✓
+                <div>
+                  <p className="text-sm font-semibold text-orange-600">
+                    Lazzat Tiffin
+                  </p>
+
+                  <h3 className="mt-1 text-xl font-bold text-gray-900">
+                    Ghar Jaisa Khana ❤️
+                  </h3>
+
+                  <p className="mt-1 text-sm text-gray-500">
+                    Freshly prepared every day
+                  </p>
                 </div>
 
-                {/* TEXT */}
-                <div>
-                  <p className="text-sm font-bold text-gray-900">
-                    Fresh & Homemade
-                  </p>
-
-                  <p className="text-xs text-gray-500">
-                    Made with care
-                  </p>
+                {/* FOOD ICON */}
+                <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-orange-100 text-2xl">
+                  🍛
                 </div>
 
               </div>

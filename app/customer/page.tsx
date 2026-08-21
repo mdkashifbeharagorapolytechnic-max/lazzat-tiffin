@@ -165,6 +165,7 @@ export default function CustomerDashboard() {
     });
 
   const today = useMemo(() => getToday(), []);
+
   const currentMonth = useMemo(
     () => getCurrentMonth(),
     []
@@ -179,10 +180,6 @@ export default function CustomerDashboard() {
     setError("");
 
     try {
-      // ---------------------------------------------
-      // GET LOGGED-IN USER
-      // ---------------------------------------------
-
       const {
         data: { user },
       } = await supabase.auth.getUser();
@@ -191,10 +188,6 @@ export default function CustomerDashboard() {
         router.replace("/customer-login");
         return;
       }
-
-      // ---------------------------------------------
-      // GET CUSTOMER
-      // ---------------------------------------------
 
       const {
         data: customerData,
@@ -215,6 +208,7 @@ export default function CustomerDashboard() {
         setError(
           "Customer account is not linked yet. Please contact Lazzat Tiffin."
         );
+
         setLoading(false);
         return;
       }
@@ -223,15 +217,12 @@ export default function CustomerDashboard() {
         setError(
           "Your customer account is currently inactive."
         );
+
         setLoading(false);
         return;
       }
 
       setCustomer(customerData as Customer);
-
-      // ---------------------------------------------
-      // TODAY ATTENDANCE
-      // ---------------------------------------------
 
       const {
         data: attendanceData,
@@ -273,10 +264,6 @@ export default function CustomerDashboard() {
         );
       }
 
-      // ---------------------------------------------
-      // TODAY MEAL CHANGES
-      // ---------------------------------------------
-
       const {
         data: changesData,
         error: changesError,
@@ -299,10 +286,6 @@ export default function CustomerDashboard() {
         (changesData || []) as MealChange[]
       );
 
-      // ---------------------------------------------
-      // CURRENT MONTH BILLING
-      // ---------------------------------------------
-
       const {
         data: billingData,
         error: billingError,
@@ -321,7 +304,6 @@ export default function CustomerDashboard() {
           billingError
         );
 
-        // Billing na hone par dashboard ko fail nahi karna
         setBilling(null);
       } else {
         setBilling(
@@ -341,21 +323,23 @@ export default function CustomerDashboard() {
     }
   }
 
-  // ---------------------------------------------
-  // LOGOUT
-  // ---------------------------------------------
+  /* ================================================= */
+  /* LOGOUT */
+  /* ================================================= */
 
   async function logout() {
     await supabase.auth.signOut({
       scope: "local",
     });
 
-    router.replace("/customer-login");
+    // Logout ke baad direct main website
+    router.replace("/");
+    router.refresh();
   }
 
-  // ---------------------------------------------
-  // MARK MEAL
-  // ---------------------------------------------
+  /* ================================================= */
+  /* MARK MEAL */
+  /* ================================================= */
 
   async function markMeal(
     meal: "lunch" | "dinner",
@@ -445,9 +429,9 @@ export default function CustomerDashboard() {
     }
   }
 
-  // ---------------------------------------------
-  // SAVE FEEDBACK
-  // ---------------------------------------------
+  /* ================================================= */
+  /* SAVE FEEDBACK */
+  /* ================================================= */
 
   async function saveFeedback(
     meal: "lunch" | "dinner"
@@ -468,6 +452,7 @@ export default function CustomerDashboard() {
       setError(
         `Please select a ${meal} rating from 1 to 5.`
       );
+
       return;
     }
 
@@ -558,9 +543,9 @@ export default function CustomerDashboard() {
     }
   }
 
-  // ---------------------------------------------
-  // REQUEST CANCELLATION
-  // ---------------------------------------------
+  /* ================================================= */
+  /* REQUEST CANCELLATION */
+  /* ================================================= */
 
   async function requestCancellation(
     meal: "lunch" | "dinner"
@@ -664,9 +649,9 @@ export default function CustomerDashboard() {
     );
   }
 
-  // ---------------------------------------------
-  // LOADING
-  // ---------------------------------------------
+  /* ================================================= */
+  /* LOADING */
+  /* ================================================= */
 
   if (loading) {
     return (
@@ -680,14 +665,15 @@ export default function CustomerDashboard() {
     );
   }
 
-  // ---------------------------------------------
-  // ERROR
-  // ---------------------------------------------
+  /* ================================================= */
+  /* ERROR */
+  /* ================================================= */
 
   if (error && !customer) {
     return (
       <main className="flex min-h-screen items-center justify-center bg-gray-100 px-4">
         <div className="w-full max-w-md rounded-2xl bg-white p-8 text-center shadow-xl">
+
           <h1 className="text-2xl font-bold text-gray-900">
             Customer Account
           </h1>
@@ -701,8 +687,9 @@ export default function CustomerDashboard() {
             onClick={logout}
             className="mt-6 rounded-xl bg-green-600 px-6 py-3 font-semibold text-white hover:bg-green-700"
           >
-            Back to Login
+            Back to Website
           </button>
+
         </div>
       </main>
     );
@@ -721,6 +708,7 @@ export default function CustomerDashboard() {
         {/* ================================================= */}
 
         <div className="mb-6 flex flex-col gap-4 rounded-2xl bg-white p-6 shadow-sm md:flex-row md:items-center md:justify-between">
+
           <div>
             <p className="text-sm text-gray-500">
               Welcome back
@@ -742,6 +730,7 @@ export default function CustomerDashboard() {
           >
             Logout
           </button>
+
         </div>
 
         {/* ================================================= */}
@@ -769,6 +758,7 @@ export default function CustomerDashboard() {
           {/* MY ACCOUNT */}
 
           <section className="rounded-2xl bg-white p-6 shadow-sm">
+
             <h2 className="text-xl font-bold text-gray-900">
               My Account
             </h2>
@@ -816,12 +806,14 @@ export default function CustomerDashboard() {
                   Active
                 </span>
               </div>
+
             </div>
           </section>
 
           {/* MY PLAN */}
 
           <section className="rounded-2xl bg-white p-6 shadow-sm">
+
             <h2 className="text-xl font-bold text-gray-900">
               My Plan
             </h2>
@@ -829,6 +821,7 @@ export default function CustomerDashboard() {
             <div className="mt-5 grid gap-4 sm:grid-cols-2">
 
               <div className="rounded-xl bg-green-50 p-4">
+
                 <p className="text-sm text-gray-600">
                   Lunch Rate
                 </p>
@@ -838,9 +831,11 @@ export default function CustomerDashboard() {
                     customer.lunch_rate
                   )}
                 </p>
+
               </div>
 
               <div className="rounded-xl bg-green-50 p-4">
+
                 <p className="text-sm text-gray-600">
                   Dinner Rate
                 </p>
@@ -850,7 +845,9 @@ export default function CustomerDashboard() {
                     customer.dinner_rate
                   )}
                 </p>
+
               </div>
+
             </div>
 
             {customer.start_date && (
@@ -859,6 +856,7 @@ export default function CustomerDashboard() {
                 {formatDate(customer.start_date)}
               </p>
             )}
+
           </section>
         </div>
 
@@ -869,6 +867,7 @@ export default function CustomerDashboard() {
         <section className="mt-6 rounded-2xl bg-white p-6 shadow-sm">
 
           <div className="mb-6">
+
             <p className="text-sm text-gray-500">
               {formatDate(today)}
             </p>
@@ -880,6 +879,7 @@ export default function CustomerDashboard() {
             <p className="mt-1 text-sm text-gray-500">
               Mark your meal after receiving/eating it.
             </p>
+
           </div>
 
           <div className="grid gap-6 lg:grid-cols-2">
@@ -989,6 +989,7 @@ export default function CustomerDashboard() {
               action={action}
               saving={saving}
             />
+
           </div>
         </section>
 
@@ -1020,6 +1021,7 @@ export default function CustomerDashboard() {
                 >
 
                   <div>
+
                     <p className="font-semibold text-gray-900">
                       {item.meal === "lunch"
                         ? "Lunch"
@@ -1042,19 +1044,23 @@ export default function CustomerDashboard() {
                         item.change_date
                       )}
                     </p>
+
                   </div>
 
                   <StatusBadge
                     status={item.status}
                   />
+
                 </div>
               ))}
+
             </div>
           )}
+
         </section>
 
         {/* ================================================= */}
-        {/* BILLING — LAST */}
+        {/* BILLING */}
         {/* ================================================= */}
 
         <section className="mt-6 rounded-2xl bg-white p-6 shadow-sm">
@@ -1062,6 +1068,7 @@ export default function CustomerDashboard() {
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
 
             <div>
+
               <p className="text-sm text-gray-500">
                 Current Billing
               </p>
@@ -1069,6 +1076,7 @@ export default function CustomerDashboard() {
               <h2 className="mt-1 text-2xl font-bold text-gray-900">
                 Billing
               </h2>
+
             </div>
 
             {billing && (
@@ -1078,6 +1086,7 @@ export default function CustomerDashboard() {
                 )}
               </span>
             )}
+
           </div>
 
           {!billing ? (
@@ -1094,15 +1103,15 @@ export default function CustomerDashboard() {
               <p className="mt-1 text-sm text-gray-500">
                 Your billing information will appear here once the monthly bill is generated.
               </p>
+
             </div>
           ) : (
             <div className="mt-6">
 
-              {/* TOTAL / DUE */}
-
               <div className="grid gap-4 sm:grid-cols-3">
 
                 <div className="rounded-xl bg-gray-50 p-5">
+
                   <p className="text-sm text-gray-500">
                     Total Bill
                   </p>
@@ -1112,9 +1121,11 @@ export default function CustomerDashboard() {
                       billing.total_amount
                     )}
                   </p>
+
                 </div>
 
                 <div className="rounded-xl bg-green-50 p-5">
+
                   <p className="text-sm text-gray-500">
                     Paid
                   </p>
@@ -1124,9 +1135,11 @@ export default function CustomerDashboard() {
                       billing.paid_amount
                     )}
                   </p>
+
                 </div>
 
                 <div className="rounded-xl bg-red-50 p-5">
+
                   <p className="text-sm text-gray-500">
                     Due
                   </p>
@@ -1136,7 +1149,9 @@ export default function CustomerDashboard() {
                       billing.due_amount
                     )}
                   </p>
+
                 </div>
+
               </div>
 
               {/* MEAL BILL BREAKDOWN */}
@@ -1171,6 +1186,7 @@ export default function CustomerDashboard() {
                       billing.lunch_amount
                     )}
                   </span>
+
                 </div>
 
                 <div className="grid grid-cols-4 border-t border-gray-200 px-4 py-4 text-sm">
@@ -1194,7 +1210,9 @@ export default function CustomerDashboard() {
                       billing.dinner_amount
                     )}
                   </span>
+
                 </div>
+
               </div>
 
               {/* PAYMENT STATUS */}
@@ -1202,6 +1220,7 @@ export default function CustomerDashboard() {
               <div className="mt-6 flex flex-col gap-3 rounded-xl border border-gray-200 p-5 sm:flex-row sm:items-center sm:justify-between">
 
                 <div>
+
                   <p className="text-sm text-gray-500">
                     Payment Status
                   </p>
@@ -1216,6 +1235,7 @@ export default function CustomerDashboard() {
                         )
                       : "Pending"}
                   </p>
+
                 </div>
 
                 <BillingStatus
@@ -1223,9 +1243,8 @@ export default function CustomerDashboard() {
                     billing.payment_status
                   }
                 />
-              </div>
 
-              {/* BILL GENERATED */}
+              </div>
 
               {billing.generated_at && (
                 <p className="mt-4 text-xs text-gray-400">
@@ -1237,8 +1256,10 @@ export default function CustomerDashboard() {
                   )}
                 </p>
               )}
+
             </div>
           )}
+
         </section>
 
       </div>
@@ -1302,11 +1323,10 @@ function MealCard({
   return (
     <div className="rounded-2xl border border-gray-200 p-5">
 
-      {/* HEADER */}
-
       <div className="flex items-center justify-between">
 
         <div>
+
           <h3 className="text-xl font-bold text-gray-900">
             {emoji} {title}
           </h3>
@@ -1325,6 +1345,7 @@ function MealCard({
                 : "Not Taken"}
             </span>
           </p>
+
         </div>
 
         <span
@@ -1338,9 +1359,8 @@ function MealCard({
             ? "Present"
             : "Absent"}
         </span>
-      </div>
 
-      {/* SOURCE */}
+      </div>
 
       {source && (
         <p className="mt-2 text-xs text-gray-400">
@@ -1350,8 +1370,6 @@ function MealCard({
             : "Admin"}
         </p>
       )}
-
-      {/* ATTENDANCE */}
 
       <div className="mt-5 grid grid-cols-2 gap-3">
 

@@ -2,11 +2,13 @@ export default function Contact() {
   return (
     <section
       id="contact"
-      className="py-24 bg-white"
+      className="bg-white py-24"
     >
-      <div className="max-w-7xl mx-auto px-6">
+      <div className="mx-auto max-w-7xl px-6">
 
-        <div className="grid md:grid-cols-2 gap-12 items-center">
+        <div className="grid items-center md:grid-cols-2 gap-12">
+
+          {/* LEFT CONTENT */}
 
           <div>
 
@@ -14,11 +16,10 @@ export default function Contact() {
               Order Your Daily Tiffin
             </h2>
 
-            <p className="mt-5 text-gray-600 leading-8">
+            <p className="mt-5 leading-8 text-gray-600">
               Fresh homemade meals delivered at your doorstep in Jamshedpur.
               Contact us today and start your healthy food journey.
             </p>
-
 
             <div className="mt-8 space-y-4">
 
@@ -36,56 +37,40 @@ export default function Contact() {
 
             </div>
 
-
             <a
               href="https://wa.me/919955672533"
               target="_blank"
-              className="inline-block mt-8 bg-green-500 hover:bg-green-600 text-white px-8 py-4 rounded-xl font-semibold transition"
+              rel="noopener noreferrer"
+              className="mt-8 inline-block rounded-xl bg-green-500 px-8 py-4 font-semibold text-white transition hover:bg-green-600"
             >
               Chat on WhatsApp
             </a>
 
           </div>
 
+          {/* RIGHT SIDE */}
 
-          <div className="bg-orange-50 rounded-3xl p-8 shadow-lg">
+          <div className="flex min-h-[300px] items-center justify-center rounded-3xl bg-gradient-to-br from-orange-50 to-green-50 p-8 shadow-lg">
 
-            <h3 className="text-2xl font-bold mb-6">
-              Quick Enquiry
-            </h3>
+            <div className="text-center">
 
+              <div className="text-6xl">
+                🍱
+              </div>
 
-            <form className="space-y-5">
+              <h3 className="mt-5 text-2xl font-bold text-gray-900">
+                Ghar Jaisa Khana
+              </h3>
 
-              <input
-                type="text"
-                placeholder="Your Name"
-                className="w-full p-4 rounded-xl border outline-none focus:border-orange-500"
-              />
+              <p className="mt-2 text-gray-600">
+                Fresh • Homemade • Delicious
+              </p>
 
+              <p className="mt-4 text-sm text-gray-500">
+                Contact us on WhatsApp to order your daily tiffin.
+              </p>
 
-              <input
-                type="tel"
-                placeholder="Phone Number"
-                className="w-full p-4 rounded-xl border outline-none focus:border-orange-500"
-              />
-
-
-              <textarea
-                placeholder="Your Message"
-                rows={4}
-                className="w-full p-4 rounded-xl border outline-none focus:border-orange-500"
-              />
-
-
-              <button
-                type="submit"
-                className="w-full bg-orange-500 hover:bg-orange-600 text-white py-4 rounded-xl font-semibold transition"
-              >
-                Submit Request
-              </button>
-
-            </form>
+            </div>
 
           </div>
 
