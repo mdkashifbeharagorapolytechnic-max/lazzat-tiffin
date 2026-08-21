@@ -1,123 +1,184 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 
 export default function Navbar() {
   const [open, setOpen] = useState(false);
 
   return (
-    <header className="fixed top-0 left-0 w-full bg-white/90 backdrop-blur-md shadow-sm z-50">
+    <header className="fixed left-0 top-0 z-50 w-full bg-white/90 shadow-sm backdrop-blur-md">
+      <nav className="mx-auto flex max-w-7xl items-center justify-between px-4 py-4 sm:px-6">
 
-      <nav className="max-w-7xl mx-auto flex items-center justify-between px-6 py-4">
-
-        <h1 className="text-2xl font-bold text-orange-600">
+        {/* LOGO */}
+        <Link
+          href="/"
+          className="text-2xl font-bold text-orange-600"
+        >
           🍱 Lazzat Tiffin
-        </h1>
+        </Link>
 
-
-        {/* Desktop Menu */}
-        <ul className="hidden md:flex items-center gap-8 text-gray-700 font-medium">
-
+        {/* DESKTOP MENU */}
+        <ul className="hidden items-center gap-7 font-medium text-gray-700 md:flex">
           <li>
-            <a href="#home" className="hover:text-orange-500">
+            <a
+              href="#home"
+              className="transition hover:text-orange-500"
+            >
               Home
             </a>
           </li>
 
           <li>
-            <a href="#plans" className="hover:text-orange-500">
+            <a
+              href="#plans"
+              className="transition hover:text-orange-500"
+            >
               Plans
             </a>
           </li>
 
           <li>
-            <a href="#menu" className="hover:text-orange-500">
+            <a
+              href="#menu"
+              className="transition hover:text-orange-500"
+            >
               Menu
             </a>
           </li>
 
           <li>
-            <a href="#reviews" className="hover:text-orange-500">
+            <a
+              href="#reviews"
+              className="transition hover:text-orange-500"
+            >
               Reviews
             </a>
           </li>
 
           <li>
-            <a href="#contact" className="hover:text-orange-500">
+            <a
+              href="#contact"
+              className="transition hover:text-orange-500"
+            >
               Contact
             </a>
           </li>
-
         </ul>
 
+        {/* DESKTOP ACTIONS */}
+        <div className="hidden items-center gap-2 md:flex">
 
-        <div className="flex items-center gap-4">
-
-          <a
-            href="https://wa.me/919955672533"
-            className="hidden md:block bg-orange-500 text-white px-5 py-2 rounded-xl hover:bg-orange-600"
+          {/* CUSTOMER LOGIN */}
+          <Link
+            href="/customer-login"
+            className="rounded-xl border border-orange-500 px-4 py-2 font-semibold text-orange-600 transition hover:bg-orange-50"
           >
-            Order Now
-          </a>
+            👤 Customer Login
+          </Link>
 
-
-          {/* Mobile Button */}
-          <button
-            onClick={() => setOpen(!open)}
-            className="md:hidden text-3xl"
+          {/* ADMIN LOGIN */}
+          <Link
+            href="/login"
+            className="rounded-xl border border-gray-300 px-4 py-2 font-semibold text-gray-700 transition hover:bg-gray-100"
           >
-            ☰
-          </button>
+            🔐 Admin
+          </Link>
 
         </div>
 
+        {/* MOBILE MENU BUTTON */}
+        <button
+          type="button"
+          onClick={() => setOpen(!open)}
+          aria-label="Toggle menu"
+          className="text-3xl text-gray-700 md:hidden"
+        >
+          {open ? "✕" : "☰"}
+        </button>
       </nav>
 
-
-      {/* Mobile Menu */}
-
+      {/* MOBILE MENU */}
       {open && (
+        <div className="border-t border-gray-100 bg-white px-6 py-5 shadow-lg md:hidden">
 
-        <div className="md:hidden bg-white shadow-lg px-6 py-5">
-
-          <ul className="space-y-5 text-gray-700 font-medium">
+          <ul className="space-y-5 font-medium text-gray-700">
 
             <li>
-              <a href="#home" onClick={() => setOpen(false)}>
+              <a
+                href="#home"
+                onClick={() => setOpen(false)}
+                className="block hover:text-orange-500"
+              >
                 Home
               </a>
             </li>
 
             <li>
-              <a href="#plans" onClick={() => setOpen(false)}>
+              <a
+                href="#plans"
+                onClick={() => setOpen(false)}
+                className="block hover:text-orange-500"
+              >
                 Plans
               </a>
             </li>
 
             <li>
-              <a href="#menu" onClick={() => setOpen(false)}>
+              <a
+                href="#menu"
+                onClick={() => setOpen(false)}
+                className="block hover:text-orange-500"
+              >
                 Menu
               </a>
             </li>
 
             <li>
-              <a href="#reviews" onClick={() => setOpen(false)}>
+              <a
+                href="#reviews"
+                onClick={() => setOpen(false)}
+                className="block hover:text-orange-500"
+              >
                 Reviews
               </a>
             </li>
 
             <li>
-              <a href="#contact" onClick={() => setOpen(false)}>
+              <a
+                href="#contact"
+                onClick={() => setOpen(false)}
+                className="block hover:text-orange-500"
+              >
                 Contact
               </a>
             </li>
 
+            {/* CUSTOMER LOGIN */}
+            <li className="border-t border-gray-200 pt-5">
+              <Link
+                href="/customer-login"
+                onClick={() => setOpen(false)}
+                className="block rounded-xl border border-orange-500 px-4 py-3 text-center font-semibold text-orange-600 hover:bg-orange-50"
+              >
+                👤 Customer Login
+              </Link>
+            </li>
+
+            {/* ADMIN LOGIN */}
+            <li>
+              <Link
+                href="/login"
+                onClick={() => setOpen(false)}
+                className="block rounded-xl border border-gray-300 px-4 py-3 text-center font-semibold text-gray-700 hover:bg-gray-100"
+              >
+                🔐 Admin Login
+              </Link>
+            </li>
+
           </ul>
-
         </div>
-
       )}
-
     </header>
   );
 }

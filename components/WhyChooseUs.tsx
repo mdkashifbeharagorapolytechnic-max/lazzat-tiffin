@@ -2,49 +2,39 @@
 
 import { motion } from "framer-motion";
 
-export default function Reviews() {
-
-  const reviews = [
+export default function WhyChooseUs() {
+  const features = [
     {
-      name: "Ayaan Khan",
-      role: "Student",
-      review:
-        "Lazzat Tiffin ka khana bilkul ghar jaisa lagta hai. Quality aur taste dono bahut ache hain.",
-      rating: "⭐⭐⭐⭐⭐",
+      icon: "🏠",
+      title: "Homemade Taste",
+      description:
+        "Freshly prepared meals with authentic ghar jaisa taste.",
     },
     {
-      name: "Fatima Rahman",
-      role: "Working Professional",
-      review:
-        "Daily fresh food aur time par delivery milti hai. Office ke liye best option hai.",
-      rating: "⭐⭐⭐⭐⭐",
+      icon: "🥗",
+      title: "Fresh Ingredients",
+      description:
+        "We use fresh and quality ingredients for every meal.",
     },
     {
-      name: "Mohammad Arshad",
-      role: "Bachelor",
-      review:
-        "Biryani aur chicken dishes ka taste bahut lajawab hai. Highly recommended.",
-      rating: "⭐⭐⭐⭐⭐",
+      icon: "🚚",
+      title: "Daily Delivery",
+      description:
+        "Fresh tiffin delivered on time to your doorstep.",
     },
     {
-      name: "Sana Ahmed",
-      role: "Student",
-      review:
-        "Affordable price me healthy aur tasty food milta hai. Service bhi bahut achhi hai.",
-      rating: "⭐⭐⭐⭐⭐",
+      icon: "❤️",
+      title: "Made With Care",
+      description:
+        "Every meal is prepared with hygiene, care and love.",
     },
   ];
 
-
   return (
-    <section
-      id="reviews"
-      className="py-24 bg-orange-50"
-    >
+    <section className="bg-white py-24">
+      <div className="mx-auto max-w-7xl px-6">
 
-      <div className="max-w-7xl mx-auto px-6">
-
-
+        {/* HEADER */}
         <motion.div
           initial={{ opacity: 0, y: 40 }}
           whileInView={{ opacity: 1, y: 0 }}
@@ -52,85 +42,61 @@ export default function Reviews() {
           viewport={{ once: true }}
           className="text-center"
         >
+          <span className="inline-block rounded-full bg-orange-100 px-4 py-2 text-sm font-semibold text-orange-600">
+            Why Lazzat Tiffin?
+          </span>
 
-          <h2 className="text-4xl font-bold text-gray-900">
-            Customer Reviews
+          <h2 className="mt-5 text-4xl font-bold text-gray-900 md:text-5xl">
+            Why Choose Us
           </h2>
 
-          <p className="mt-4 text-gray-600">
-            Our customers love our homemade taste.
+          <p className="mx-auto mt-4 max-w-2xl text-gray-600">
+            Fresh food, homemade taste and reliable daily service
+            for your everyday meals.
           </p>
-
         </motion.div>
 
-
-
-        <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-8 mt-14">
-
-
-          {reviews.map((item, index) => (
-
+        {/* FEATURES */}
+        <div className="mt-14 grid gap-8 sm:grid-cols-2 lg:grid-cols-4">
+          {features.map((item, index) => (
             <motion.div
-
-              key={item.name}
-
+              key={item.title}
               initial={{
                 opacity: 0,
                 y: 50,
               }}
-
               whileInView={{
                 opacity: 1,
                 y: 0,
               }}
-
               transition={{
                 duration: 0.6,
-                delay: index * 0.15,
+                delay: index * 0.12,
               }}
-
               viewport={{
                 once: true,
               }}
-
               whileHover={{
-                y: -10,
+                y: -8,
               }}
-
-              className="bg-white rounded-3xl p-7 shadow-lg"
-
+              className="rounded-3xl border border-orange-100 bg-orange-50 p-7 text-center shadow-lg"
             >
-
-              <div className="text-xl">
-                {item.rating}
+              <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-orange-500 text-3xl">
+                {item.icon}
               </div>
 
-
-              <p className="mt-5 text-gray-600 leading-7">
-                "{item.review}"
-              </p>
-
-
-              <h3 className="mt-6 font-bold text-gray-900">
-                {item.name}
+              <h3 className="mt-6 text-xl font-bold text-gray-900">
+                {item.title}
               </h3>
 
-
-              <p className="text-orange-500">
-                {item.role}
+              <p className="mt-3 leading-7 text-gray-600">
+                {item.description}
               </p>
-
-
             </motion.div>
-
           ))}
-
-
         </div>
 
-
       </div>
-
     </section>
   );
 }
