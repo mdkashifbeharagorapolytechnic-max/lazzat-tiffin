@@ -6,7 +6,7 @@ export default function Plans() {
   const plans = [
     {
       title: "Lunch Plan",
-      price: "₹1800",
+      price: "₹1650",
       subtitle: "Lunch Only",
       features: [
         "Daily Fresh Lunch",
@@ -18,7 +18,7 @@ export default function Plans() {
     },
     {
       title: "Dinner Plan",
-      price: "₹1800",
+      price: "₹1650",
       subtitle: "Dinner Only",
       features: [
         "Daily Fresh Dinner",
@@ -30,7 +30,7 @@ export default function Plans() {
     },
     {
       title: "Full Plan",
-      price: "₹3500",
+      price: "₹3000",
       subtitle: "Lunch + Dinner",
       features: [
         "Daily Lunch & Dinner",
