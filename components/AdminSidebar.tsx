@@ -42,6 +42,11 @@ const menuItems = [
     icon: "🍱",
   },
   {
+    name: "Extra Meal Requests",
+    href: "/admin/extra-meal-requests",
+    icon: "👨‍👩‍👧‍👦",
+  },
+  {
     name: "Reviews",
     href: "/admin/reviews",
     icon: "⭐",

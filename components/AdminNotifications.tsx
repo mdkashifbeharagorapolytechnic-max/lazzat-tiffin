@@ -1,147 +1,357 @@
 "use client";
 
-import Link from "next/link";
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { supabase } from "@/lib/supabase";
 
-export default function AdminNotifications() {
-  const [customerRequests, setCustomerRequests] =
-    useState(0);
+type NotificationItem = {
+  id: string;
+  title: string;
+  description: string;
+  count: number;
+  href: string;
+  icon: string;
+  color: string;
+};
 
-  const [mealRequests, setMealRequests] =
-    useState(0);
+export default function AdminNotifications() {
+  const [notifications, setNotifications] = useState<
+    NotificationItem[]
+  >([]);
 
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+
+  async function loadNotifications() {
+    try {
+      setError("");
+
+      const [
+        customerRequestsResult,
+        mealChangesResult,
+        extraMealRequestsResult,
+      ] = await Promise.all([
+        /*
+         * CUSTOMER REQUESTS
+         */
+        supabase
+          .from("customer_requests")
+          .select("id", {
+            count: "exact",
+            head: true,
+          })
+          .eq("status", "pending"),
+
+        /*
+         * MEAL CANCELLATION REQUESTS
+         */
+        supabase
+          .from("meal_changes")
+          .select("id", {
+            count: "exact",
+            head: true,
+          })
+          .eq("status", "pending"),
+
+        /*
+         * EXTRA MEAL / GUEST REQUESTS
+         */
+        supabase
+          .from("extra_meal_requests")
+          .select("id", {
+            count: "exact",
+            head: true,
+          })
+          .eq("status", "pending"),
+      ]);
+
+      if (customerRequestsResult.error) {
+        throw customerRequestsResult.error;
+      }
+
+      if (mealChangesResult.error) {
+        throw mealChangesResult.error;
+      }
+
+      if (extraMealRequestsResult.error) {
+        throw extraMealRequestsResult.error;
+      }
+
+      const customerRequestCount =
+        customerRequestsResult.count || 0;
+
+      const mealChangeCount =
+        mealChangesResult.count || 0;
+
+      const extraMealRequestCount =
+        extraMealRequestsResult.count || 0;
+
+      const newNotifications: NotificationItem[] = [];
+
+      /*
+       * CUSTOMER REQUESTS
+       */
+      if (customerRequestCount > 0) {
+        newNotifications.push({
+          id: "customer-requests",
+          title: "New Customer Requests",
+          description:
+            "Customers are waiting for approval.",
+          count: customerRequestCount,
+          href: "/admin/requests",
+          icon: "👤",
+          color:
+            "border-blue-200 bg-blue-50 text-blue-700",
+        });
+      }
+
+      /*
+       * MEAL CANCELLATION REQUESTS
+       */
+      if (mealChangeCount > 0) {
+        newNotifications.push({
+          id: "meal-changes",
+          title: "Meal Cancellation Requests",
+          description:
+            "Customers have requested meal changes or cancellations.",
+          count: mealChangeCount,
+          href: "/admin/meal-requests",
+          icon: "🍱",
+          color:
+            "border-orange-200 bg-orange-50 text-orange-700",
+        });
+      }
+
+      /*
+       * EXTRA MEAL REQUESTS
+       */
+      if (extraMealRequestCount > 0) {
+        newNotifications.push({
+          id: "extra-meal-requests",
+          title: "Extra Meal Requests",
+          description:
+            "Customers have requested extra meals for their guests.",
+          count: extraMealRequestCount,
+          href: "/admin/extra-meal-requests",
+          icon: "👥",
+          color:
+            "border-green-200 bg-green-50 text-green-700",
+        });
+      }
+
+      setNotifications(newNotifications);
+    } catch (err) {
+      console.error(
+        "Admin notifications error:",
+        err
+      );
+
+      setError(
+        err instanceof Error
+          ? err.message
+          : "Unable to load notifications."
+      );
+    } finally {
+      setLoading(false);
+    }
+  }
 
   useEffect(() => {
     loadNotifications();
 
+    /*
+     * AUTO REFRESH EVERY 30 SECONDS
+     */
     const interval = setInterval(() => {
       loadNotifications();
     }, 30000);
 
-    return () => clearInterval(interval);
+    return () => {
+      clearInterval(interval);
+    };
   }, []);
 
-  async function loadNotifications() {
-    const [
-      customerResult,
-      mealResult,
-    ] = await Promise.all([
-      supabase
-        .from("customer_requests")
-        .select("id", {
-          count: "exact",
-          head: true,
-        })
-        .eq("status", "pending"),
-
-      supabase
-        .from("meal_changes")
-        .select("id", {
-          count: "exact",
-          head: true,
-        })
-        .eq("status", "pending"),
-    ]);
-
-    setCustomerRequests(
-      customerResult.count || 0
+  const totalNotifications =
+    notifications.reduce(
+      (sum, item) => sum + item.count,
+      0
     );
 
-    setMealRequests(
-      mealResult.count || 0
-    );
+  /*
+   * LOADING
+   */
+  if (loading) {
+    return (
+      <section className="mb-6 rounded-2xl bg-white p-5 shadow-sm">
+        <div className="flex items-center gap-3">
+          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gray-100 text-xl">
+            🔔
+          </div>
 
-    setLoading(false);
+          <div>
+            <h2 className="font-bold text-gray-900">
+              Notifications
+            </h2>
+
+            <p className="text-sm text-gray-500">
+              Checking new requests...
+            </p>
+          </div>
+        </div>
+      </section>
+    );
   }
 
-  const total =
-    customerRequests + mealRequests;
+  /*
+   * ERROR
+   */
+  if (error) {
+    return (
+      <section className="mb-6 rounded-2xl border border-red-200 bg-red-50 p-5">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <h2 className="font-bold text-red-800">
+              Notifications
+            </h2>
 
+            <p className="mt-1 text-sm text-red-700">
+              {error}
+            </p>
+          </div>
+
+          <button
+            type="button"
+            onClick={loadNotifications}
+            className="rounded-lg bg-red-600 px-4 py-2 text-sm font-semibold text-white hover:bg-red-700"
+          >
+            Retry
+          </button>
+        </div>
+      </section>
+    );
+  }
+
+  /*
+   * NO PENDING REQUESTS
+   */
+  if (notifications.length === 0) {
+    return (
+      <section className="mb-6 rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
+        <div className="flex items-center gap-3">
+          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-green-100 text-xl">
+            ✓
+          </div>
+
+          <div>
+            <div className="flex items-center gap-2">
+              <h2 className="font-bold text-gray-900">
+                Notifications
+              </h2>
+
+              <span className="rounded-full bg-green-100 px-2.5 py-1 text-xs font-bold text-green-700">
+                0
+              </span>
+            </div>
+
+            <p className="mt-1 text-sm text-gray-500">
+              No pending requests.
+            </p>
+          </div>
+        </div>
+      </section>
+    );
+  }
+
+  /*
+   * NOTIFICATIONS
+   */
   return (
-    <div className="mb-6 rounded-2xl bg-white p-5 shadow-sm">
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-lg font-bold text-gray-900">
-            🔔 Notifications
-          </h2>
+    <section className="mb-6 rounded-2xl bg-white p-5 shadow-sm">
+      {/* HEADER */}
 
-          <p className="mt-1 text-sm text-gray-500">
-            Pending requests that need your attention
-          </p>
+      <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex items-center gap-3">
+          <div className="relative flex h-11 w-11 items-center justify-center rounded-xl bg-red-100 text-xl">
+            🔔
+
+            {totalNotifications > 0 && (
+              <span className="absolute -right-2 -top-2 flex h-6 min-w-6 items-center justify-center rounded-full bg-red-600 px-1.5 text-xs font-bold text-white">
+                {totalNotifications}
+              </span>
+            )}
+          </div>
+
+          <div>
+            <h2 className="text-xl font-bold text-gray-900">
+              Notifications
+            </h2>
+
+            <p className="text-sm text-gray-500">
+              Pending admin requests
+            </p>
+          </div>
         </div>
 
-        {!loading && (
-          <div className="rounded-full bg-red-100 px-3 py-1 text-sm font-bold text-red-600">
-            {total}
-          </div>
-        )}
+        <button
+          type="button"
+          onClick={loadNotifications}
+          className="rounded-lg border border-gray-200 bg-gray-50 px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-100"
+        >
+          ↻ Refresh
+        </button>
       </div>
 
-      {loading ? (
-        <div className="mt-5 text-sm text-gray-500">
-          Checking notifications...
-        </div>
-      ) : total === 0 ? (
-        <div className="mt-5 rounded-xl bg-green-50 p-4 text-sm font-medium text-green-700">
-          ✓ No pending notifications.
-        </div>
-      ) : (
-        <div className="mt-5 grid gap-4 md:grid-cols-2">
-          {/* CUSTOMER REQUESTS */}
+      {/* NOTIFICATION LIST */}
+
+      <div className="grid gap-3 md:grid-cols-3">
+        {notifications.map((notification) => (
           <Link
-            href="/admin/requests"
-            className="group rounded-xl border border-gray-200 p-5 transition hover:border-green-300 hover:bg-green-50"
+            key={notification.id}
+            href={notification.href}
+            className={`rounded-xl border p-4 transition hover:-translate-y-0.5 hover:shadow-md ${notification.color}`}
           >
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-gray-500">
-                  New Customer Requests
-                </p>
+            <div className="flex items-start justify-between gap-3">
+              <div className="flex items-center gap-3">
+                <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-white text-xl shadow-sm">
+                  {notification.icon}
+                </div>
 
-                <p className="mt-2 text-3xl font-bold text-gray-900">
-                  {customerRequests}
-                </p>
+                <div>
+                  <h3 className="font-bold">
+                    {notification.title}
+                  </h3>
+
+                  <p className="mt-1 text-xs opacity-80">
+                    {notification.description}
+                  </p>
+                </div>
               </div>
 
-              <div className="rounded-xl bg-yellow-100 px-4 py-3 text-2xl">
-                👤
-              </div>
+              <span className="flex h-8 min-w-8 items-center justify-center rounded-full bg-white px-2 text-sm font-bold shadow-sm">
+                {notification.count}
+              </span>
             </div>
 
-            <p className="mt-4 text-sm font-semibold text-green-600 group-hover:text-green-700">
-              Review Requests →
-            </p>
-          </Link>
-
-          {/* MEAL REQUESTS */}
-          <Link
-            href="/admin/meal-requests"
-            className="group rounded-xl border border-gray-200 p-5 transition hover:border-green-300 hover:bg-green-50"
-          >
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-gray-500">
-                  Meal Cancellation Requests
-                </p>
-
-                <p className="mt-2 text-3xl font-bold text-gray-900">
-                  {mealRequests}
-                </p>
-              </div>
-
-              <div className="rounded-xl bg-red-100 px-4 py-3 text-2xl">
-                🍽️
-              </div>
+            <div className="mt-4 text-xs font-bold">
+              View Requests →
             </div>
-
-            <p className="mt-4 text-sm font-semibold text-green-600 group-hover:text-green-700">
-              Review Meal Requests →
-            </p>
           </Link>
+        ))}
+      </div>
+
+      {/* TOTAL */}
+
+      <div className="mt-4 rounded-xl bg-gray-50 px-4 py-3">
+        <div className="flex items-center justify-between">
+          <span className="text-sm font-semibold text-gray-600">
+            Total Pending Requests
+          </span>
+
+          <span className="text-lg font-bold text-gray-900">
+            {totalNotifications}
+          </span>
         </div>
-      )}
-    </div>
+      </div>
+    </section>
   );
 }

@@ -39,6 +39,29 @@ type MealChange = {
   created_at: string;
 };
 
+type ExtraMealRequest = {
+  id: string;
+  customer_id: string;
+  meal_date: string;
+  meal_type: "lunch" | "dinner";
+  quantity: number;
+  note: string | null;
+  status: "pending" | "approved" | "rejected";
+  created_at: string;
+  approved_at: string | null;
+  start_date: string | null;
+  end_date: string | null;
+};
+
+type ExtraMealRequestDay = {
+  id: string;
+  request_id: string;
+  meal_date: string;
+  meal_type: "lunch" | "dinner";
+  included: boolean;
+  created_at: string;
+};
+
 type Billing = {
   id: string;
   customer_id: string;
@@ -54,6 +77,12 @@ type Billing = {
   due_amount: number;
   payment_status: string;
   generated_at: string;
+};
+
+type ExtraMealDaySelection = {
+  date: string;
+  lunch: boolean;
+  dinner: boolean;
 };
 
 function getToday() {
@@ -99,6 +128,10 @@ function formatMonth(value: string | null) {
   });
 }
 
+function formatMoney(value: number | null | undefined) {
+  return `₹${Number(value || 0).toLocaleString("en-IN")}`;
+}
+
 function getCurrentTimeInMinutes() {
   const date = new Date();
 
@@ -119,8 +152,54 @@ function getCutoffText(meal: "lunch" | "dinner") {
   return meal === "lunch" ? "11:00 AM" : "7:00 PM";
 }
 
-function formatMoney(value: number | null | undefined) {
-  return `₹${Number(value || 0).toLocaleString("en-IN")}`;
+function getDatesBetween(
+  startDate: string,
+  endDate: string
+): string[] {
+  if (!startDate || !endDate) {
+    return [];
+  }
+
+  const dates: string[] = [];
+
+  const current = new Date(
+    `${startDate}T00:00:00`
+  );
+
+  const end = new Date(
+    `${endDate}T00:00:00`
+  );
+
+  while (current <= end) {
+    dates.push(
+      `${current.getFullYear()}-${String(
+        current.getMonth() + 1
+      ).padStart(2, "0")}-${String(
+        current.getDate()
+      ).padStart(2, "0")}`
+    );
+
+    current.setDate(current.getDate() + 1);
+  }
+
+  return dates;
+}
+
+function formatLongDate(value: string) {
+  const [year, month, day] = value.split("-");
+
+  const date = new Date(
+    Number(year),
+    Number(month) - 1,
+    Number(day)
+  );
+
+  return date.toLocaleDateString("en-IN", {
+    weekday: "short",
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+  });
 }
 
 export default function CustomerDashboard() {
@@ -135,6 +214,12 @@ export default function CustomerDashboard() {
   const [mealChanges, setMealChanges] = useState<
     MealChange[]
   >([]);
+
+  const [extraMealRequests, setExtraMealRequests] =
+    useState<ExtraMealRequest[]>([]);
+
+  const [extraMealRequestDays, setExtraMealRequestDays] =
+    useState<Record<string, ExtraMealRequestDay[]>>({});
 
   const [billing, setBilling] =
     useState<Billing | null>(null);
@@ -164,6 +249,25 @@ export default function CustomerDashboard() {
       dinner: "",
     });
 
+  /* ================================================= */
+  /* EXTRA MEAL REQUEST FORM */
+  /* ================================================= */
+
+  const [extraMealStartDate, setExtraMealStartDate] =
+    useState(getToday());
+
+  const [extraMealEndDate, setExtraMealEndDate] =
+    useState(getToday());
+
+  const [extraMealQuantity, setExtraMealQuantity] =
+    useState<number>(1);
+
+  const [extraMealNote, setExtraMealNote] =
+    useState("");
+
+  const [extraMealDays, setExtraMealDays] =
+    useState<ExtraMealDaySelection[]>([]);
+
   const today = useMemo(() => getToday(), []);
 
   const currentMonth = useMemo(
@@ -171,9 +275,48 @@ export default function CustomerDashboard() {
     []
   );
 
+  /* ================================================= */
+  /* CREATE DATE RANGE */
+  /* ================================================= */
+
+  useEffect(() => {
+    if (!extraMealStartDate || !extraMealEndDate) {
+      setExtraMealDays([]);
+      return;
+    }
+
+    if (
+      extraMealEndDate <
+      extraMealStartDate
+    ) {
+      setExtraMealDays([]);
+      return;
+    }
+
+    const dates = getDatesBetween(
+      extraMealStartDate,
+      extraMealEndDate
+    );
+
+    setExtraMealDays(
+      dates.map((date) => ({
+        date,
+        lunch: true,
+        dinner: true,
+      }))
+    );
+  }, [
+    extraMealStartDate,
+    extraMealEndDate,
+  ]);
+
   useEffect(() => {
     loadCustomerDashboard();
   }, []);
+
+  /* ================================================= */
+  /* LOAD DASHBOARD */
+  /* ================================================= */
 
   async function loadCustomerDashboard() {
     setLoading(true);
@@ -224,6 +367,10 @@ export default function CustomerDashboard() {
 
       setCustomer(customerData as Customer);
 
+      /* ================================================= */
+      /* ATTENDANCE */
+      /* ================================================= */
+
       const {
         data: attendanceData,
         error: attendanceError,
@@ -246,7 +393,9 @@ export default function CustomerDashboard() {
 
       if (attendanceData) {
         setLunchRating(
-          Number(attendanceData.lunch_rating || 0)
+          Number(
+            attendanceData.lunch_rating || 0
+          )
         );
 
         setLunchComment(
@@ -263,6 +412,10 @@ export default function CustomerDashboard() {
           attendanceData.dinner_comment || ""
         );
       }
+
+      /* ================================================= */
+      /* MEAL CHANGES */
+      /* ================================================= */
 
       const {
         data: changesData,
@@ -286,6 +439,88 @@ export default function CustomerDashboard() {
         (changesData || []) as MealChange[]
       );
 
+      /* ================================================= */
+      /* EXTRA MEAL REQUESTS */
+      /* ================================================= */
+
+      const {
+        data: extraRequestsData,
+        error: extraRequestsError,
+      } = await supabase
+        .from("extra_meal_requests")
+        .select(
+          "id,customer_id,meal_date,meal_type,quantity,note,status,created_at,approved_at,start_date,end_date"
+        )
+        .eq("customer_id", customerData.id)
+        .order("created_at", {
+          ascending: false,
+        });
+
+      if (extraRequestsError) {
+        throw extraRequestsError;
+      }
+
+      const requests =
+        (extraRequestsData ||
+          []) as ExtraMealRequest[];
+
+      setExtraMealRequests(requests);
+
+      /* ================================================= */
+      /* EXTRA MEAL REQUEST DAYS */
+      /* ================================================= */
+
+      if (requests.length > 0) {
+        const requestIds =
+          requests.map(
+            (request) => request.id
+          );
+
+        const {
+          data: requestDaysData,
+          error: requestDaysError,
+        } = await supabase
+          .from("extra_meal_request_days")
+          .select(
+            "id,request_id,meal_date,meal_type,included,created_at"
+          )
+          .in(
+            "request_id",
+            requestIds
+          )
+          .order("meal_date", {
+            ascending: true,
+          });
+
+        if (requestDaysError) {
+          throw requestDaysError;
+        }
+
+        const grouped: Record<
+          string,
+          ExtraMealRequestDay[]
+        > = {};
+
+        (
+          (requestDaysData ||
+            []) as ExtraMealRequestDay[]
+        ).forEach((day) => {
+          if (!grouped[day.request_id]) {
+            grouped[day.request_id] = [];
+          }
+
+          grouped[day.request_id].push(day);
+        });
+
+        setExtraMealRequestDays(grouped);
+      } else {
+        setExtraMealRequestDays({});
+      }
+
+      /* ================================================= */
+      /* BILLING */
+      /* ================================================= */
+
       const {
         data: billingData,
         error: billingError,
@@ -295,7 +530,10 @@ export default function CustomerDashboard() {
           "id,customer_id,billing_month,lunch_count,dinner_count,lunch_rate,dinner_rate,lunch_amount,dinner_amount,total_amount,paid_amount,due_amount,payment_status,generated_at"
         )
         .eq("customer_id", customerData.id)
-        .eq("billing_month", currentMonth)
+        .eq(
+          "billing_month",
+          currentMonth
+        )
         .maybeSingle();
 
       if (billingError) {
@@ -307,7 +545,8 @@ export default function CustomerDashboard() {
         setBilling(null);
       } else {
         setBilling(
-          (billingData as Billing | null) || null
+          (billingData as Billing | null) ||
+            null
         );
       }
     } catch (err) {
@@ -332,7 +571,6 @@ export default function CustomerDashboard() {
       scope: "local",
     });
 
-    // Logout ke baad direct main website
     router.replace("/");
     router.refresh();
   }
@@ -373,13 +611,15 @@ export default function CustomerDashboard() {
           currentData?.lunch_rating || null,
 
         lunch_comment:
-          currentData?.lunch_comment || null,
+          currentData?.lunch_comment ||
+          null,
 
         dinner_rating:
           currentData?.dinner_rating || null,
 
         dinner_comment:
-          currentData?.dinner_comment || null,
+          currentData?.dinner_comment ||
+          null,
 
         lunch_source:
           meal === "lunch" && value
@@ -486,7 +726,8 @@ export default function CustomerDashboard() {
 
               lunch_comment:
                 meal === "lunch"
-                  ? comment.trim() || null
+                  ? comment.trim() ||
+                    null
                   : existing?.lunch_comment ||
                     null,
 
@@ -498,7 +739,8 @@ export default function CustomerDashboard() {
 
               dinner_comment:
                 meal === "dinner"
-                  ? comment.trim() || null
+                  ? comment.trim() ||
+                    null
                   : existing?.dinner_comment ||
                     null,
 
@@ -601,8 +843,9 @@ export default function CustomerDashboard() {
             meal,
             action: "cancel",
             reason:
-              cancelReason[meal]?.trim() ||
-              null,
+              cancelReason[
+                meal
+              ]?.trim() || null,
             status: "pending",
           });
 
@@ -647,6 +890,250 @@ export default function CustomerDashboard() {
         item.action === "cancel" &&
         item.status === "pending"
     );
+  }
+
+  /* ================================================= */
+  /* EXTRA MEAL DAY TOGGLE */
+  /* ================================================= */
+
+  function toggleExtraMealDay(
+    date: string,
+    meal: "lunch" | "dinner"
+  ) {
+    setExtraMealDays((current) =>
+      current.map((item) => {
+        if (item.date !== date) {
+          return item;
+        }
+
+        return {
+          ...item,
+          [meal]: !item[meal],
+        };
+      })
+    );
+  }
+
+  /* ================================================= */
+  /* EXTRA MEAL COUNTS */
+  /* ================================================= */
+
+  const extraLunchCount =
+    extraMealDays.filter(
+      (day) => day.lunch
+    ).length;
+
+  const extraDinnerCount =
+    extraMealDays.filter(
+      (day) => day.dinner
+    ).length;
+
+  const extraTotalMealCount =
+    (extraLunchCount +
+      extraDinnerCount) *
+    extraMealQuantity;
+
+  /* ================================================= */
+  /* SUBMIT EXTRA MEAL REQUEST */
+  /* ================================================= */
+
+  async function submitExtraMealRequest() {
+    if (!customer || saving) return;
+
+    setError("");
+    setMessage("");
+
+    if (!extraMealStartDate) {
+      setError(
+        "Please select guest start date."
+      );
+      return;
+    }
+
+    if (!extraMealEndDate) {
+      setError(
+        "Please select guest end date."
+      );
+      return;
+    }
+
+    if (
+      extraMealEndDate <
+      extraMealStartDate
+    ) {
+      setError(
+        "End date cannot be before start date."
+      );
+      return;
+    }
+
+    if (
+      extraMealStartDate < today
+    ) {
+      setError(
+        "Guest start date cannot be in the past."
+      );
+      return;
+    }
+
+    if (
+      !Number.isInteger(
+        extraMealQuantity
+      ) ||
+      extraMealQuantity < 1
+    ) {
+      setError(
+        "Please enter a valid guest quantity."
+      );
+      return;
+    }
+
+    const selectedDays =
+      extraMealDays.filter(
+        (day) =>
+          day.lunch || day.dinner
+      );
+
+    if (selectedDays.length === 0) {
+      setError(
+        "Please select at least one Lunch or Dinner."
+      );
+      return;
+    }
+
+    const hasAnyLunch =
+      extraMealDays.some(
+        (day) => day.lunch
+      );
+
+    const firstMealType =
+      hasAnyLunch
+        ? "lunch"
+        : "dinner";
+
+    setSaving(true);
+    setAction("extra-meal-request");
+
+    try {
+      /*
+       * Legacy columns meal_date and meal_type
+       * are still populated so existing table
+       * structure remains compatible.
+       */
+
+      const { data: requestData, error: requestError } =
+        await supabase
+          .from("extra_meal_requests")
+          .insert({
+            customer_id: customer.id,
+
+            meal_date:
+              extraMealStartDate,
+
+            meal_type:
+              firstMealType,
+
+            quantity:
+              extraMealQuantity,
+
+            note:
+              extraMealNote.trim() ||
+              null,
+
+            status: "pending",
+
+            start_date:
+              extraMealStartDate,
+
+            end_date:
+              extraMealEndDate,
+          })
+          .select(
+            "id"
+          )
+          .single();
+
+      if (requestError) {
+        throw requestError;
+      }
+
+      if (!requestData?.id) {
+        throw new Error(
+          "Extra meal request was created but request ID was not returned."
+        );
+      }
+
+      const requestDays =
+        selectedDays.flatMap(
+          (day) => {
+            const rows = [];
+
+            if (day.lunch) {
+              rows.push({
+                request_id:
+                  requestData.id,
+                meal_date:
+                  day.date,
+                meal_type:
+                  "lunch",
+                included: true,
+              });
+            }
+
+            if (day.dinner) {
+              rows.push({
+                request_id:
+                  requestData.id,
+                meal_date:
+                  day.date,
+                meal_type:
+                  "dinner",
+                included: true,
+              });
+            }
+
+            return rows;
+          }
+        );
+
+      const {
+        error: daysError,
+      } = await supabase
+        .from(
+          "extra_meal_request_days"
+        )
+        .insert(requestDays);
+
+      if (daysError) {
+        /*
+         * Parent request created but day insert
+         * failed. Show clear error.
+         */
+        throw daysError;
+      }
+
+      setMessage(
+        `Extra meal request submitted successfully. ${extraTotalMealCount} extra meal(s) requested. Admin approval is pending.`
+      );
+
+      setExtraMealQuantity(1);
+      setExtraMealNote("");
+      setExtraMealStartDate(today);
+      setExtraMealEndDate(today);
+
+      await loadCustomerDashboard();
+    } catch (err) {
+      console.error(err);
+
+      setError(
+        err instanceof Error
+          ? err.message
+          : "Unable to submit extra meal request."
+      );
+    } finally {
+      setSaving(false);
+      setAction("");
+    }
   }
 
   /* ================================================= */
@@ -701,6 +1188,7 @@ export default function CustomerDashboard() {
 
   return (
     <main className="min-h-screen bg-gray-100 px-4 py-6 md:px-8 md:py-8">
+
       <div className="mx-auto max-w-6xl">
 
         {/* ================================================= */}
@@ -710,6 +1198,7 @@ export default function CustomerDashboard() {
         <div className="mb-6 flex flex-col gap-4 rounded-2xl bg-white p-6 shadow-sm md:flex-row md:items-center md:justify-between">
 
           <div>
+
             <p className="text-sm text-gray-500">
               Welcome back
             </p>
@@ -721,6 +1210,7 @@ export default function CustomerDashboard() {
             <p className="mt-1 text-sm text-gray-500">
               Lazzat Tiffin Customer Portal
             </p>
+
           </div>
 
           <button
@@ -808,6 +1298,7 @@ export default function CustomerDashboard() {
               </div>
 
             </div>
+
           </section>
 
           {/* MY PLAN */}
@@ -853,11 +1344,14 @@ export default function CustomerDashboard() {
             {customer.start_date && (
               <p className="mt-5 text-sm text-gray-500">
                 Service started:{" "}
-                {formatDate(customer.start_date)}
+                {formatDate(
+                  customer.start_date
+                )}
               </p>
             )}
 
           </section>
+
         </div>
 
         {/* ================================================= */}
@@ -884,13 +1378,12 @@ export default function CustomerDashboard() {
 
           <div className="grid gap-6 lg:grid-cols-2">
 
-            {/* LUNCH */}
-
             <MealCard
               title="Lunch"
               emoji="🍱"
               active={
-                attendance?.lunch || false
+                attendance?.lunch ||
+                false
               }
               source={
                 attendance?.lunch_source
@@ -904,21 +1397,33 @@ export default function CustomerDashboard() {
                 setLunchComment
               }
               onMarkTaken={() =>
-                markMeal("lunch", true)
+                markMeal(
+                  "lunch",
+                  true
+                )
               }
               onMarkNotTaken={() =>
-                markMeal("lunch", false)
+                markMeal(
+                  "lunch",
+                  false
+                )
               }
               onSaveFeedback={() =>
-                saveFeedback("lunch")
+                saveFeedback(
+                  "lunch"
+                )
               }
               onCancel={() =>
-                requestCancellation("lunch")
+                requestCancellation(
+                  "lunch"
+                )
               }
               cancelReason={
                 cancelReason.lunch
               }
-              onCancelReasonChange={(value) =>
+              onCancelReasonChange={(
+                value
+              ) =>
                 setCancelReason(
                   (current) => ({
                     ...current,
@@ -932,18 +1437,19 @@ export default function CustomerDashboard() {
               canCancel={isBeforeCutoff(
                 "lunch"
               )}
-              cutoff={getCutoffText("lunch")}
+              cutoff={getCutoffText(
+                "lunch"
+              )}
               action={action}
               saving={saving}
             />
-
-            {/* DINNER */}
 
             <MealCard
               title="Dinner"
               emoji="🌙"
               active={
-                attendance?.dinner || false
+                attendance?.dinner ||
+                false
               }
               source={
                 attendance?.dinner_source
@@ -957,21 +1463,33 @@ export default function CustomerDashboard() {
                 setDinnerComment
               }
               onMarkTaken={() =>
-                markMeal("dinner", true)
+                markMeal(
+                  "dinner",
+                  true
+                )
               }
               onMarkNotTaken={() =>
-                markMeal("dinner", false)
+                markMeal(
+                  "dinner",
+                  false
+                )
               }
               onSaveFeedback={() =>
-                saveFeedback("dinner")
+                saveFeedback(
+                  "dinner"
+                )
               }
               onCancel={() =>
-                requestCancellation("dinner")
+                requestCancellation(
+                  "dinner"
+                )
               }
               cancelReason={
                 cancelReason.dinner
               }
-              onCancelReasonChange={(value) =>
+              onCancelReasonChange={(
+                value
+              ) =>
                 setCancelReason(
                   (current) => ({
                     ...current,
@@ -985,12 +1503,565 @@ export default function CustomerDashboard() {
               canCancel={isBeforeCutoff(
                 "dinner"
               )}
-              cutoff={getCutoffText("dinner")}
+              cutoff={getCutoffText(
+                "dinner"
+              )}
               action={action}
               saving={saving}
             />
 
           </div>
+
+        </section>
+
+        {/* ================================================= */}
+        {/* EXTRA MEAL REQUEST */}
+        {/* ================================================= */}
+
+        <section className="mt-6 rounded-2xl bg-white p-6 shadow-sm">
+
+          <div>
+
+            <p className="text-sm font-semibold text-green-600">
+              GUEST MEAL
+            </p>
+
+            <h2 className="mt-1 text-2xl font-bold text-gray-900">
+              Request Extra Meals
+            </h2>
+
+            <p className="mt-1 text-sm leading-6 text-gray-500">
+              Guest ke stay ki date range select karein.
+              Har date ka Lunch aur Dinner separately
+              select/deselect kar sakte hain.
+            </p>
+
+          </div>
+
+          {/* ================================================= */}
+          {/* DATE + QUANTITY */}
+          {/* ================================================= */}
+
+          <div className="mt-6 grid gap-5 md:grid-cols-3">
+
+            <div>
+              <label className="text-sm font-semibold text-gray-700">
+                Guest Start Date
+              </label>
+
+              <input
+                type="date"
+                min={today}
+                value={
+                  extraMealStartDate
+                }
+                onChange={(e) =>
+                  setExtraMealStartDate(
+                    e.target.value
+                  )
+                }
+                disabled={saving}
+                className="mt-2 w-full rounded-xl border border-gray-300 bg-white px-4 py-3 text-sm outline-none focus:border-green-500 focus:ring-2 focus:ring-green-100 disabled:bg-gray-100"
+              />
+            </div>
+
+            <div>
+              <label className="text-sm font-semibold text-gray-700">
+                Guest End Date
+              </label>
+
+              <input
+                type="date"
+                min={
+                  extraMealStartDate ||
+                  today
+                }
+                value={
+                  extraMealEndDate
+                }
+                onChange={(e) =>
+                  setExtraMealEndDate(
+                    e.target.value
+                  )
+                }
+                disabled={saving}
+                className="mt-2 w-full rounded-xl border border-gray-300 bg-white px-4 py-3 text-sm outline-none focus:border-green-500 focus:ring-2 focus:ring-green-100 disabled:bg-gray-100"
+              />
+            </div>
+
+            <div>
+              <label className="text-sm font-semibold text-gray-700">
+                Guest Quantity
+              </label>
+
+              <input
+                type="number"
+                min="1"
+                max="20"
+                value={
+                  extraMealQuantity
+                }
+                onChange={(e) =>
+                  setExtraMealQuantity(
+                    Math.max(
+                      1,
+                      Number(
+                        e.target.value
+                      )
+                    )
+                  )
+                }
+                disabled={saving}
+                className="mt-2 w-full rounded-xl border border-gray-300 bg-white px-4 py-3 text-sm outline-none focus:border-green-500 focus:ring-2 focus:ring-green-100 disabled:bg-gray-100"
+              />
+            </div>
+
+          </div>
+
+          {/* ================================================= */}
+          {/* DAILY MEAL SELECTION */}
+          {/* ================================================= */}
+
+          {extraMealDays.length > 0 && (
+            <div className="mt-6">
+
+              <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+
+                <div>
+                  <h3 className="text-lg font-bold text-gray-900">
+                    Select Guest Meals
+                  </h3>
+
+                  <p className="text-sm text-gray-500">
+                    Default mein Lunch aur Dinner
+                    dono selected hain.
+                  </p>
+                </div>
+
+                <div className="rounded-xl bg-green-50 px-4 py-3 text-sm">
+
+                  <span className="font-semibold text-green-700">
+                    {extraLunchCount}
+                  </span>{" "}
+                  Lunch +{" "}
+                  <span className="font-semibold text-green-700">
+                    {extraDinnerCount}
+                  </span>{" "}
+                  Dinner
+
+                  <span className="mx-1">
+                    =
+                  </span>
+
+                  <span className="font-bold text-green-700">
+                    {extraTotalMealCount}
+                  </span>{" "}
+                  total meals
+
+                </div>
+
+              </div>
+
+              <div className="overflow-hidden rounded-2xl border border-gray-200">
+
+                <div className="hidden grid-cols-3 bg-gray-50 px-4 py-3 text-sm font-semibold text-gray-600 sm:grid">
+
+                  <span>Date</span>
+
+                  <span className="text-center">
+                    🍱 Lunch
+                  </span>
+
+                  <span className="text-center">
+                    🌙 Dinner
+                  </span>
+
+                </div>
+
+                <div className="divide-y divide-gray-200">
+
+                  {extraMealDays.map(
+                    (day) => (
+                      <div
+                        key={day.date}
+                        className="grid grid-cols-1 gap-3 px-4 py-4 sm:grid-cols-3 sm:items-center"
+                      >
+
+                        <div>
+                          <p className="font-semibold text-gray-900">
+                            {formatLongDate(
+                              day.date
+                            )}
+                          </p>
+
+                          <p className="text-xs text-gray-400 sm:hidden">
+                            Select meals:
+                          </p>
+                        </div>
+
+                        {/* LUNCH */}
+
+                        <button
+                          type="button"
+                          onClick={() =>
+                            toggleExtraMealDay(
+                              day.date,
+                              "lunch"
+                            )
+                          }
+                          disabled={saving}
+                          className={`rounded-xl px-4 py-3 text-sm font-semibold transition ${
+                            day.lunch
+                              ? "bg-green-600 text-white"
+                              : "border border-gray-300 bg-white text-gray-500"
+                          } disabled:cursor-not-allowed disabled:opacity-60`}
+                        >
+                          {day.lunch
+                            ? "✓ Lunch Included"
+                            : "Lunch Skipped"}
+                        </button>
+
+                        {/* DINNER */}
+
+                        <button
+                          type="button"
+                          onClick={() =>
+                            toggleExtraMealDay(
+                              day.date,
+                              "dinner"
+                            )
+                          }
+                          disabled={saving}
+                          className={`rounded-xl px-4 py-3 text-sm font-semibold transition ${
+                            day.dinner
+                              ? "bg-green-600 text-white"
+                              : "border border-gray-300 bg-white text-gray-500"
+                          } disabled:cursor-not-allowed disabled:opacity-60`}
+                        >
+                          {day.dinner
+                            ? "✓ Dinner Included"
+                            : "Dinner Skipped"}
+                        </button>
+
+                      </div>
+                    )
+                  )}
+
+                </div>
+
+              </div>
+
+            </div>
+          )}
+
+          {/* ================================================= */}
+          {/* NOTE */}
+          {/* ================================================= */}
+
+          <div className="mt-6">
+
+            <label className="text-sm font-semibold text-gray-700">
+              Note{" "}
+              <span className="font-normal text-gray-400">
+                (Optional)
+              </span>
+            </label>
+
+            <textarea
+              value={extraMealNote}
+              onChange={(e) =>
+                setExtraMealNote(
+                  e.target.value
+                )
+              }
+              disabled={saving}
+              rows={3}
+              placeholder="Example: Mere 2 guests 23 August se 28 August tak rahenge."
+              className="mt-2 w-full resize-none rounded-xl border border-gray-300 bg-white px-4 py-3 text-sm outline-none focus:border-green-500 focus:ring-2 focus:ring-green-100 disabled:bg-gray-100"
+            />
+
+          </div>
+
+          {/* ================================================= */}
+          {/* REQUEST SUMMARY */}
+          {/* ================================================= */}
+
+          <div className="mt-6 rounded-2xl border border-green-200 bg-green-50 p-5">
+
+            <h3 className="font-bold text-gray-900">
+              Request Summary
+            </h3>
+
+            <div className="mt-3 grid gap-3 sm:grid-cols-4">
+
+              <div>
+                <p className="text-xs text-gray-500">
+                  Guest Stay
+                </p>
+
+                <p className="mt-1 text-sm font-semibold text-gray-900">
+                  {formatDate(
+                    extraMealStartDate
+                  )}{" "}
+                  →{" "}
+                  {formatDate(
+                    extraMealEndDate
+                  )}
+                </p>
+              </div>
+
+              <div>
+                <p className="text-xs text-gray-500">
+                  Guests
+                </p>
+
+                <p className="mt-1 text-sm font-semibold text-gray-900">
+                  {extraMealQuantity}
+                </p>
+              </div>
+
+              <div>
+                <p className="text-xs text-gray-500">
+                  Lunch
+                </p>
+
+                <p className="mt-1 text-sm font-semibold text-gray-900">
+                  {extraLunchCount} day(s)
+                </p>
+              </div>
+
+              <div>
+                <p className="text-xs text-gray-500">
+                  Dinner
+                </p>
+
+                <p className="mt-1 text-sm font-semibold text-gray-900">
+                  {extraDinnerCount} day(s)
+                </p>
+              </div>
+
+            </div>
+
+            <div className="mt-4 border-t border-green-200 pt-4">
+
+              <p className="text-sm text-gray-600">
+                Total Extra Meals
+              </p>
+
+              <p className="mt-1 text-2xl font-bold text-green-700">
+                {extraTotalMealCount}
+              </p>
+
+            </div>
+
+          </div>
+
+          {/* ================================================= */}
+          {/* SUBMIT */}
+          {/* ================================================= */}
+
+          <button
+            type="button"
+            onClick={
+              submitExtraMealRequest
+            }
+            disabled={
+              saving ||
+              extraMealDays.length ===
+                0 ||
+              extraTotalMealCount ===
+                0
+            }
+            className="mt-6 w-full rounded-xl bg-green-600 px-5 py-4 font-semibold text-white transition hover:bg-green-700 disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            {action ===
+            "extra-meal-request"
+              ? "Sending Request..."
+              : "Send Extra Meal Request"}
+          </button>
+
+          <p className="mt-3 text-center text-xs text-gray-500">
+            Request submit hone ke baad admin approval
+            required hoga.
+          </p>
+
+          {/* ================================================= */}
+          {/* REQUEST HISTORY */}
+          {/* ================================================= */}
+
+          <div className="mt-8">
+
+            <h3 className="text-xl font-bold text-gray-900">
+              My Extra Meal Requests
+            </h3>
+
+            {extraMealRequests.length ===
+            0 ? (
+              <div className="mt-4 rounded-xl bg-gray-50 p-5 text-center text-sm text-gray-500">
+                No extra meal requests yet.
+              </div>
+            ) : (
+              <div className="mt-4 space-y-4">
+
+                {extraMealRequests.map(
+                  (request) => {
+
+                    const days =
+                      extraMealRequestDays[
+                        request.id
+                      ] || [];
+
+                    const includedLunch =
+                      days.filter(
+                        (day) =>
+                          day.meal_type ===
+                            "lunch" &&
+                          day.included
+                      ).length;
+
+                    const includedDinner =
+                      days.filter(
+                        (day) =>
+                          day.meal_type ===
+                            "dinner" &&
+                          day.included
+                      ).length;
+
+                    return (
+                      <div
+                        key={
+                          request.id
+                        }
+                        className="rounded-2xl border border-gray-200 p-5"
+                      >
+
+                        <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+
+                          <div>
+
+                            <p className="text-lg font-bold text-gray-900">
+                              Guest Meal Request
+                            </p>
+
+                            {request.start_date &&
+                              request.end_date && (
+                                <p className="mt-1 text-sm text-gray-600">
+                                  {formatDate(
+                                    request.start_date
+                                  )}{" "}
+                                  →{" "}
+                                  {formatDate(
+                                    request.end_date
+                                  )}
+                                </p>
+                              )}
+
+                            <p className="mt-1 text-sm text-gray-600">
+                              Guests:{" "}
+                              <span className="font-semibold">
+                                {
+                                  request.quantity
+                                }
+                              </span>
+                            </p>
+
+                            <p className="mt-1 text-sm text-gray-600">
+                              Lunch:{" "}
+                              <span className="font-semibold">
+                                {
+                                  includedLunch
+                                }
+                              </span>{" "}
+                              day(s)
+                              {" • "}
+                              Dinner:{" "}
+                              <span className="font-semibold">
+                                {
+                                  includedDinner
+                                }
+                              </span>{" "}
+                              day(s)
+                            </p>
+
+                            {request.note && (
+                              <p className="mt-2 text-sm text-gray-500">
+                                Note:{" "}
+                                {
+                                  request.note
+                                }
+                              </p>
+                            )}
+
+                            <p className="mt-2 text-xs text-gray-400">
+                              Requested:{" "}
+                              {new Date(
+                                request.created_at
+                              ).toLocaleString(
+                                "en-IN"
+                              )}
+                            </p>
+
+                          </div>
+
+                          <ExtraMealStatusBadge
+                            status={
+                              request.status
+                            }
+                          />
+
+                        </div>
+
+                        {/* REQUEST DAYS */}
+
+                        {days.length >
+                          0 && (
+                          <div className="mt-5 border-t border-gray-200 pt-4">
+
+                            <p className="mb-3 text-sm font-semibold text-gray-800">
+                              Selected Meals
+                            </p>
+
+                            <div className="grid gap-2 sm:grid-cols-2">
+
+                              {days.map(
+                                (day) => (
+                                  <div
+                                    key={
+                                      day.id
+                                    }
+                                    className="rounded-lg bg-gray-50 px-3 py-2 text-sm"
+                                  >
+                                    <span className="font-semibold">
+                                      {formatDate(
+                                        day.meal_date
+                                      )}
+                                    </span>
+
+                                    {" — "}
+
+                                    {day.meal_type ===
+                                    "lunch"
+                                      ? "🍱 Lunch"
+                                      : "🌙 Dinner"}
+                                  </div>
+                                )
+                              )}
+
+                            </div>
+
+                          </div>
+                        )}
+
+                      </div>
+                    );
+                  }
+                )}
+
+              </div>
+            )}
+
+          </div>
+
         </section>
 
         {/* ================================================= */}
@@ -1007,52 +2078,61 @@ export default function CustomerDashboard() {
             Your cancellation requests and their status.
           </p>
 
-          {mealChanges.length === 0 ? (
+          {mealChanges.length ===
+          0 ? (
             <div className="mt-5 rounded-xl bg-gray-50 p-5 text-center text-sm text-gray-500">
               No meal change requests today.
             </div>
           ) : (
             <div className="mt-5 space-y-3">
 
-              {mealChanges.map((item) => (
-                <div
-                  key={item.id}
-                  className="flex flex-col gap-3 rounded-xl border border-gray-200 p-4 sm:flex-row sm:items-center sm:justify-between"
-                >
+              {mealChanges.map(
+                (item) => (
+                  <div
+                    key={item.id}
+                    className="flex flex-col gap-3 rounded-xl border border-gray-200 p-4 sm:flex-row sm:items-center sm:justify-between"
+                  >
 
-                  <div>
+                    <div>
 
-                    <p className="font-semibold text-gray-900">
-                      {item.meal === "lunch"
-                        ? "Lunch"
-                        : "Dinner"}{" "}
-                      —{" "}
-                      {item.action === "cancel"
-                        ? "Cancellation"
-                        : "Restore"}
-                    </p>
-
-                    {item.reason && (
-                      <p className="mt-1 text-sm text-gray-500">
-                        Reason:{" "}
-                        {item.reason}
+                      <p className="font-semibold text-gray-900">
+                        {item.meal ===
+                        "lunch"
+                          ? "Lunch"
+                          : "Dinner"}{" "}
+                        —{" "}
+                        {item.action ===
+                        "cancel"
+                          ? "Cancellation"
+                          : "Restore"}
                       </p>
-                    )}
 
-                    <p className="mt-1 text-xs text-gray-400">
-                      {formatDate(
-                        item.change_date
+                      {item.reason && (
+                        <p className="mt-1 text-sm text-gray-500">
+                          Reason:{" "}
+                          {
+                            item.reason
+                          }
+                        </p>
                       )}
-                    </p>
+
+                      <p className="mt-1 text-xs text-gray-400">
+                        {formatDate(
+                          item.change_date
+                        )}
+                      </p>
+
+                    </div>
+
+                    <StatusBadge
+                      status={
+                        item.status
+                      }
+                    />
 
                   </div>
-
-                  <StatusBadge
-                    status={item.status}
-                  />
-
-                </div>
-              ))}
+                )
+              )}
 
             </div>
           )}
@@ -1154,8 +2234,6 @@ export default function CustomerDashboard() {
 
               </div>
 
-              {/* MEAL BILL BREAKDOWN */}
-
               <div className="mt-6 overflow-hidden rounded-xl border border-gray-200">
 
                 <div className="grid grid-cols-4 bg-gray-50 px-4 py-3 text-xs font-semibold text-gray-600 sm:text-sm">
@@ -1172,7 +2250,9 @@ export default function CustomerDashboard() {
                   </span>
 
                   <span>
-                    {billing.lunch_count}
+                    {
+                      billing.lunch_count
+                    }
                   </span>
 
                   <span>
@@ -1196,7 +2276,9 @@ export default function CustomerDashboard() {
                   </span>
 
                   <span>
-                    {billing.dinner_count}
+                    {
+                      billing.dinner_count
+                    }
                   </span>
 
                   <span>
@@ -1214,8 +2296,6 @@ export default function CustomerDashboard() {
                 </div>
 
               </div>
-
-              {/* PAYMENT STATUS */}
 
               <div className="mt-6 flex flex-col gap-3 rounded-xl border border-gray-200 p-5 sm:flex-row sm:items-center sm:justify-between">
 
@@ -1263,6 +2343,7 @@ export default function CustomerDashboard() {
         </section>
 
       </div>
+
     </main>
   );
 }
@@ -1523,6 +2604,7 @@ function MealCard({
         </button>
 
       </div>
+
     </div>
   );
 }
@@ -1557,6 +2639,41 @@ function StatusBadge({
 
   return (
     <span className="rounded-full bg-yellow-100 px-3 py-1 text-xs font-semibold text-yellow-700">
+      Pending
+    </span>
+  );
+}
+
+/* ===================================================== */
+/* EXTRA MEAL STATUS */
+/* ===================================================== */
+
+function ExtraMealStatusBadge({
+  status,
+}: {
+  status:
+    | "pending"
+    | "approved"
+    | "rejected";
+}) {
+  if (status === "approved") {
+    return (
+      <span className="w-fit rounded-full bg-green-100 px-4 py-2 text-xs font-semibold text-green-700">
+        Approved
+      </span>
+    );
+  }
+
+  if (status === "rejected") {
+    return (
+      <span className="w-fit rounded-full bg-red-100 px-4 py-2 text-xs font-semibold text-red-700">
+        Rejected
+      </span>
+    );
+  }
+
+  return (
+    <span className="w-fit rounded-full bg-yellow-100 px-4 py-2 text-xs font-semibold text-yellow-700">
       Pending
     </span>
   );
