@@ -26,10 +26,17 @@ export default function AdminNotifications() {
     try {
       setError("");
 
+      /*
+       * =====================================================
+       * LOAD ALL ADMIN NOTIFICATIONS
+       * =====================================================
+       */
+
       const [
         customerRequestsResult,
         mealChangesResult,
         extraMealRequestsResult,
+        reviewsResult,
       ] = await Promise.all([
         /*
          * CUSTOMER REQUESTS
@@ -63,7 +70,26 @@ export default function AdminNotifications() {
             head: true,
           })
           .eq("status", "pending"),
+
+        /*
+         * CUSTOMER REVIEWS
+         *
+         * Reviews are treated as notifications.
+         * No status column is required here.
+         */
+        supabase
+          .from("reviews")
+          .select("id", {
+            count: "exact",
+            head: true,
+          }),
       ]);
+
+      /*
+       * =====================================================
+       * ERROR CHECK
+       * =====================================================
+       */
 
       if (customerRequestsResult.error) {
         throw customerRequestsResult.error;
@@ -77,6 +103,23 @@ export default function AdminNotifications() {
         throw extraMealRequestsResult.error;
       }
 
+      if (reviewsResult.error) {
+        /*
+         * If reviews table does not exist, show the other
+         * notifications instead of breaking the dashboard.
+         */
+        console.warn(
+          "Customer reviews notification unavailable:",
+          reviewsResult.error.message
+        );
+      }
+
+      /*
+       * =====================================================
+       * COUNTS
+       * =====================================================
+       */
+
       const customerRequestCount =
         customerRequestsResult.count || 0;
 
@@ -86,11 +129,23 @@ export default function AdminNotifications() {
       const extraMealRequestCount =
         extraMealRequestsResult.count || 0;
 
+      const reviewCount =
+        reviewsResult.error
+          ? 0
+          : reviewsResult.count || 0;
+
+      /*
+       * =====================================================
+       * BUILD NOTIFICATION LIST
+       * =====================================================
+       */
+
       const newNotifications: NotificationItem[] = [];
 
       /*
        * CUSTOMER REQUESTS
        */
+
       if (customerRequestCount > 0) {
         newNotifications.push({
           id: "customer-requests",
@@ -108,6 +163,7 @@ export default function AdminNotifications() {
       /*
        * MEAL CANCELLATION REQUESTS
        */
+
       if (mealChangeCount > 0) {
         newNotifications.push({
           id: "meal-changes",
@@ -125,6 +181,7 @@ export default function AdminNotifications() {
       /*
        * EXTRA MEAL REQUESTS
        */
+
       if (extraMealRequestCount > 0) {
         newNotifications.push({
           id: "extra-meal-requests",
@@ -136,6 +193,24 @@ export default function AdminNotifications() {
           icon: "👥",
           color:
             "border-green-200 bg-green-50 text-green-700",
+        });
+      }
+
+      /*
+       * CUSTOMER REVIEWS
+       */
+
+      if (reviewCount > 0) {
+        newNotifications.push({
+          id: "customer-reviews",
+          title: "Customer Reviews",
+          description:
+            "Customers have submitted reviews and feedback.",
+          count: reviewCount,
+          href: "/admin/reviews",
+          icon: "⭐",
+          color:
+            "border-yellow-200 bg-yellow-50 text-yellow-700",
         });
       }
 
@@ -156,6 +231,12 @@ export default function AdminNotifications() {
     }
   }
 
+  /*
+   * =====================================================
+   * INITIAL LOAD + AUTO REFRESH
+   * =====================================================
+   */
+
   useEffect(() => {
     loadNotifications();
 
@@ -171,6 +252,12 @@ export default function AdminNotifications() {
     };
   }, []);
 
+  /*
+   * =====================================================
+   * TOTAL NOTIFICATIONS
+   * =====================================================
+   */
+
   const totalNotifications =
     notifications.reduce(
       (sum, item) => sum + item.count,
@@ -178,8 +265,11 @@ export default function AdminNotifications() {
     );
 
   /*
+   * =====================================================
    * LOADING
+   * =====================================================
    */
+
   if (loading) {
     return (
       <section className="mb-6 rounded-2xl bg-white p-5 shadow-sm">
@@ -194,7 +284,7 @@ export default function AdminNotifications() {
             </h2>
 
             <p className="text-sm text-gray-500">
-              Checking new requests...
+              Checking new requests and reviews...
             </p>
           </div>
         </div>
@@ -203,8 +293,11 @@ export default function AdminNotifications() {
   }
 
   /*
+   * =====================================================
    * ERROR
+   * =====================================================
    */
+
   if (error) {
     return (
       <section className="mb-6 rounded-2xl border border-red-200 bg-red-50 p-5">
@@ -232,8 +325,11 @@ export default function AdminNotifications() {
   }
 
   /*
-   * NO PENDING REQUESTS
+   * =====================================================
+   * NO NOTIFICATIONS
+   * =====================================================
    */
+
   if (notifications.length === 0) {
     return (
       <section className="mb-6 rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
@@ -254,7 +350,7 @@ export default function AdminNotifications() {
             </div>
 
             <p className="mt-1 text-sm text-gray-500">
-              No pending requests.
+              No pending requests or new reviews.
             </p>
           </div>
         </div>
@@ -263,8 +359,11 @@ export default function AdminNotifications() {
   }
 
   /*
+   * =====================================================
    * NOTIFICATIONS
+   * =====================================================
    */
+
   return (
     <section className="mb-6 rounded-2xl bg-white p-5 shadow-sm">
       {/* HEADER */}
@@ -287,7 +386,7 @@ export default function AdminNotifications() {
             </h2>
 
             <p className="text-sm text-gray-500">
-              Pending admin requests
+              Requests and customer reviews
             </p>
           </div>
         </div>
@@ -303,7 +402,7 @@ export default function AdminNotifications() {
 
       {/* NOTIFICATION LIST */}
 
-      <div className="grid gap-3 md:grid-cols-3">
+      <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
         {notifications.map((notification) => (
           <Link
             key={notification.id}
@@ -333,7 +432,7 @@ export default function AdminNotifications() {
             </div>
 
             <div className="mt-4 text-xs font-bold">
-              View Requests →
+              View Details →
             </div>
           </Link>
         ))}
@@ -344,7 +443,7 @@ export default function AdminNotifications() {
       <div className="mt-4 rounded-xl bg-gray-50 px-4 py-3">
         <div className="flex items-center justify-between">
           <span className="text-sm font-semibold text-gray-600">
-            Total Pending Requests
+            Total Notifications
           </span>
 
           <span className="text-lg font-bold text-gray-900">
