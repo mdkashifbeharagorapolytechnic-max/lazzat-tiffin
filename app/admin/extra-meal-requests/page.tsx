@@ -16,7 +16,6 @@ type ExtraMealRequest = {
   created_at: string;
   approved_at: string | null;
 
-  // Legacy columns - may or may not exist in the table
   meal_date?: string | null;
   meal_type?: "lunch" | "dinner" | null;
 };
@@ -48,7 +47,9 @@ function formatDate(value: string | null | undefined) {
 
   const [year, month, day] = value.split("-");
 
-  if (!year || !month || !day) return value;
+  if (!year || !month || !day) {
+    return value;
+  }
 
   return `${day}/${month}/${year}`;
 }
@@ -154,10 +155,12 @@ export default function ExtraMealRequestsPage() {
   >([]);
 
   const [loading, setLoading] = useState(true);
+
   const [processingId, setProcessingId] =
     useState<string | null>(null);
 
   const [error, setError] = useState("");
+
   const [success, setSuccess] = useState("");
 
   const [filter, setFilter] =
@@ -170,7 +173,7 @@ export default function ExtraMealRequestsPage() {
     try {
       /*
        * =====================================================
-       * LOAD REQUESTS
+       * LOAD EXTRA MEAL REQUESTS
        * =====================================================
        */
 
@@ -249,28 +252,8 @@ export default function ExtraMealRequestsPage() {
 
       /*
        * =====================================================
-       * LOAD REQUEST DAYS
+       * LOAD SELECTED MEAL DAYS
        * =====================================================
-       *
-       * This is the important part.
-       *
-       * We do NOT calculate selected days from:
-       *
-       * end_date - start_date
-       *
-       * because customer can select Lunch/Dinner
-       * individually.
-       *
-       * Actual selected meals come from:
-       *
-       * extra_meal_request_days
-       *
-       * Example:
-       * 27 Aug Lunch
-       * 27 Aug Dinner
-       * 28 Aug Lunch
-       *
-       * = 3 selected meal days
        */
 
       const requestIds =
@@ -357,7 +340,7 @@ export default function ExtraMealRequestsPage() {
 
   /*
    * =====================================================
-   * SUMMARY
+   * SUMMARY COUNTS
    * =====================================================
    */
 
@@ -407,7 +390,7 @@ export default function ExtraMealRequestsPage() {
 
   /*
    * =====================================================
-   * UPDATE STATUS
+   * UPDATE REQUEST STATUS
    * =====================================================
    */
 
@@ -449,11 +432,19 @@ export default function ExtraMealRequestsPage() {
         throw updateError;
       }
 
-      setSuccess(
-        status === "approved"
-          ? "Extra meal request approved successfully."
-          : "Extra meal request rejected successfully."
-      );
+      if (status === "approved") {
+        setSuccess(
+          "Extra meal request approved successfully."
+        );
+      } else if (status === "rejected") {
+        setSuccess(
+          "Extra meal request rejected successfully."
+        );
+      } else {
+        setSuccess(
+          "Extra meal request status updated successfully."
+        );
+      }
 
       await loadRequests();
     } catch (err) {
@@ -499,9 +490,7 @@ export default function ExtraMealRequestsPage() {
     return (
       <main className="min-h-screen bg-gray-100 p-6">
         <div className="mx-auto max-w-7xl">
-
           <div className="rounded-2xl bg-white p-10 text-center shadow-sm">
-
             <div className="mx-auto h-10 w-10 animate-spin rounded-full border-4 border-gray-200 border-t-green-600" />
 
             <h1 className="mt-5 text-xl font-bold text-gray-900">
@@ -511,9 +500,7 @@ export default function ExtraMealRequestsPage() {
             <p className="mt-2 text-sm text-gray-500">
               Please wait.
             </p>
-
           </div>
-
         </div>
       </main>
     );
@@ -521,7 +508,6 @@ export default function ExtraMealRequestsPage() {
 
   return (
     <main className="min-h-screen bg-gray-100 p-4 md:p-6">
-
       <div className="mx-auto max-w-7xl">
 
         {/* ================================================= */}
@@ -529,11 +515,9 @@ export default function ExtraMealRequestsPage() {
         {/* ================================================= */}
 
         <header className="mb-6 rounded-2xl bg-gray-900 px-6 py-7 text-white shadow-sm">
-
           <div className="flex flex-col gap-5 md:flex-row md:items-center md:justify-between">
 
             <div>
-
               <p className="text-sm font-semibold tracking-wide text-green-400">
                 ADMIN PANEL
               </p>
@@ -545,7 +529,6 @@ export default function ExtraMealRequestsPage() {
               <p className="mt-2 text-sm text-gray-300">
                 Manage customer guest meal requests.
               </p>
-
             </div>
 
             <button
@@ -558,7 +541,6 @@ export default function ExtraMealRequestsPage() {
             </button>
 
           </div>
-
         </header>
 
         {/* ================================================= */}
@@ -569,7 +551,6 @@ export default function ExtraMealRequestsPage() {
           <div className="mb-5 flex flex-col gap-3 rounded-xl border border-red-200 bg-red-50 p-4 text-red-700 sm:flex-row sm:items-center sm:justify-between">
 
             <div>
-
               <p className="font-bold">
                 Error
               </p>
@@ -577,7 +558,6 @@ export default function ExtraMealRequestsPage() {
               <p className="mt-1 text-sm">
                 {error}
               </p>
-
             </div>
 
             <button
@@ -628,7 +608,6 @@ export default function ExtraMealRequestsPage() {
                 : ""
             }`}
           >
-
             <p className="text-sm font-semibold text-gray-500">
               Pending
             </p>
@@ -640,7 +619,6 @@ export default function ExtraMealRequestsPage() {
             <p className="mt-1 text-xs text-gray-400">
               Requests waiting for approval
             </p>
-
           </button>
 
           {/* APPROVED */}
@@ -656,7 +634,6 @@ export default function ExtraMealRequestsPage() {
                 : ""
             }`}
           >
-
             <p className="text-sm font-semibold text-gray-500">
               Approved
             </p>
@@ -668,7 +645,6 @@ export default function ExtraMealRequestsPage() {
             <p className="mt-1 text-xs text-gray-400">
               Approved guest requests
             </p>
-
           </button>
 
           {/* REJECTED */}
@@ -684,7 +660,6 @@ export default function ExtraMealRequestsPage() {
                 : ""
             }`}
           >
-
             <p className="text-sm font-semibold text-gray-500">
               Rejected
             </p>
@@ -696,7 +671,6 @@ export default function ExtraMealRequestsPage() {
             <p className="mt-1 text-xs text-gray-400">
               Rejected guest requests
             </p>
-
           </button>
 
         </section>
@@ -758,7 +732,6 @@ export default function ExtraMealRequestsPage() {
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
 
             <div>
-
               <h2 className="text-2xl font-bold text-gray-900">
                 Requests
               </h2>
@@ -774,7 +747,6 @@ export default function ExtraMealRequestsPage() {
                   ? "s"
                   : ""}
               </p>
-
             </div>
 
             <div className="rounded-full bg-gray-100 px-4 py-2 text-sm font-semibold text-gray-600">
@@ -809,14 +781,10 @@ export default function ExtraMealRequestsPage() {
                 (request) => {
 
                   const lunchCount =
-                    getLunchCount(
-                      request
-                    );
+                    getLunchCount(request);
 
                   const dinnerCount =
-                    getDinnerCount(
-                      request
-                    );
+                    getDinnerCount(request);
 
                   const selectedMealDays =
                     getSelectedMealDays(
@@ -970,7 +938,9 @@ export default function ExtraMealRequestsPage() {
                                 <span className="font-bold text-green-700">
                                   {lunchCount}
                                 </span>
+
                                 {" • "}
+
                                 🌙 Dinner:{" "}
                                 <span className="font-bold text-green-700">
                                   {dinnerCount}
@@ -980,7 +950,9 @@ export default function ExtraMealRequestsPage() {
                             </div>
 
                             <div className="rounded-lg bg-white px-4 py-2 text-sm font-bold text-green-700 shadow-sm">
+
                               {selectedMealDays} selected ×{" "}
+
                               {Number(
                                 request.quantity ||
                                   0
@@ -991,8 +963,11 @@ export default function ExtraMealRequestsPage() {
                               ) !== 1
                                 ? "s"
                                 : ""}{" "}
+
                               ={" "}
+
                               {totalGuestMeals} meals
+
                             </div>
 
                           </div>
@@ -1113,6 +1088,8 @@ export default function ExtraMealRequestsPage() {
 
                         <div className="mt-6 flex flex-col gap-3 border-t border-gray-200 pt-5 sm:flex-row sm:justify-end">
 
+                          {/* APPROVE */}
+
                           {request.status !==
                             "approved" && (
                             <button
@@ -1129,13 +1106,13 @@ export default function ExtraMealRequestsPage() {
                               }
                               className="rounded-xl bg-green-600 px-5 py-3 font-semibold text-white hover:bg-green-700 disabled:cursor-not-allowed disabled:opacity-50"
                             >
-                              {isProcessing &&
-                              request.status !==
-                                "approved"
+                              {isProcessing
                                 ? "Processing..."
                                 : "✓ Approve"}
                             </button>
                           )}
+
+                          {/* REJECT */}
 
                           {request.status !==
                             "rejected" && (
@@ -1153,9 +1130,7 @@ export default function ExtraMealRequestsPage() {
                               }
                               className="rounded-xl bg-red-600 px-5 py-3 font-semibold text-white hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-50"
                             >
-                              {isProcessing &&
-                              request.status !==
-                                "rejected"
+                              {isProcessing
                                 ? "Processing..."
                                 : "✕ Reject"}
                             </button>
@@ -1176,7 +1151,6 @@ export default function ExtraMealRequestsPage() {
         </section>
 
       </div>
-
     </main>
   );
 }
@@ -1230,7 +1204,6 @@ function InfoBox({
           : "bg-gray-50"
       }`}
     >
-
       <p className="text-xs font-semibold text-gray-500">
         {label}
       </p>
@@ -1244,7 +1217,6 @@ function InfoBox({
       >
         {value}
       </p>
-
     </div>
   );
 }
