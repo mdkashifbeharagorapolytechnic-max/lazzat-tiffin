@@ -4,6 +4,21 @@ import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import { supabase } from "@/lib/supabase";
 
+type PublicReviewRow = {
+  id: string;
+  attendance_date: string;
+  customer_id: string;
+  customer_name: string | null;
+
+  lunch_rating: number | null;
+  lunch_comment: string | null;
+  lunch_review_approved: boolean | null;
+
+  dinner_rating: number | null;
+  dinner_comment: string | null;
+  dinner_review_approved: boolean | null;
+};
+
 type Review = {
   id: string;
   customerName: string;
@@ -13,404 +28,208 @@ type Review = {
   date: string;
 };
 
-type AttendanceRecord = {
-  id: string;
-  customer_id: string;
-  attendance_date: string;
-  lunch_rating: number | null;
-  lunch_comment: string | null;
-  dinner_rating: number | null;
-  dinner_comment: string | null;
-  lunch_review_approved: boolean | null;
-  dinner_review_approved: boolean | null;
-};
-
-type Customer = {
-  id: string;
-  name: string;
-};
-
 export default function Reviews() {
   const [reviews, setReviews] = useState<Review[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetchReviews();
-  }, []);
+    const fetchReviews = async () => {
+      setLoading(true);
 
-  async function fetchReviews() {
-    setLoading(true);
-
-    try {
-      const {
-        data: customers,
-        error: customersError,
-      } = await supabase
-        .from("customers")
-        .select("id, name");
-
-      if (customersError) {
-        console.error(
-          "Customer fetch error:",
-          customersError
-        );
-
-        setReviews([]);
-        return;
-      }
-
-      const {
-        data: attendance,
-        error: attendanceError,
-      } = await supabase
-        .from("attendance")
-        .select(`
-          id,
-          customer_id,
-          attendance_date,
-          lunch_rating,
-          lunch_comment,
-          dinner_rating,
-          dinner_comment,
-          lunch_review_approved,
-          dinner_review_approved
-        `)
-        .order("attendance_date", {
-          ascending: false,
-        })
+      const { data, error } = await supabase
+        .from("public_customer_reviews")
+        .select(
+          `
+            id,
+            attendance_date,
+            customer_id,
+            customer_name,
+            lunch_rating,
+            lunch_comment,
+            lunch_review_approved,
+            dinner_rating,
+            dinner_comment,
+            dinner_review_approved
+          `
+        )
+        .order("attendance_date", { ascending: false })
         .limit(500);
 
-      if (attendanceError) {
-        console.error(
-          "Review fetch error:",
-          attendanceError
-        );
-
+      if (error) {
+        console.error("Error loading reviews:", error);
         setReviews([]);
+        setLoading(false);
         return;
       }
-
-      const customerMap = new Map<
-        string,
-        string
-      >();
-
-      (customers || []).forEach(
-        (customer: Customer) => {
-          customerMap.set(
-            customer.id,
-            customer.name
-          );
-        }
-      );
 
       const reviewList: Review[] = [];
 
-      (attendance || []).forEach(
-        (record: AttendanceRecord) => {
-          const customerName =
-            customerMap.get(
-              record.customer_id
-            ) || "Customer";
+      (data as PublicReviewRow[] | null)?.forEach((row) => {
+        const customerName = row.customer_name?.trim() || "Customer";
 
-          /*
-           * LUNCH REVIEW
-           */
-
-          if (
-            record.lunch_rating !== null &&
-            record.lunch_rating >= 1 &&
-            record.lunch_rating <= 5 &&
-            record.lunch_comment &&
-            record.lunch_comment.trim() !== "" &&
-            record.lunch_review_approved === true
-          ) {
-            reviewList.push({
-              id: `${record.id}-lunch`,
-              customerName,
-              rating: record.lunch_rating,
-              comment:
-                record.lunch_comment.trim(),
-              meal: "Lunch",
-              date: record.attendance_date,
-            });
-          }
-
-          /*
-           * DINNER REVIEW
-           */
-
-          if (
-            record.dinner_rating !== null &&
-            record.dinner_rating >= 1 &&
-            record.dinner_rating <= 5 &&
-            record.dinner_comment &&
-            record.dinner_comment.trim() !== "" &&
-            record.dinner_review_approved === true
-          ) {
-            reviewList.push({
-              id: `${record.id}-dinner`,
-              customerName,
-              rating: record.dinner_rating,
-              comment:
-                record.dinner_comment.trim(),
-              meal: "Dinner",
-              date: record.attendance_date,
-            });
-          }
+        // Lunch review
+        if (
+          row.lunch_review_approved === true &&
+          typeof row.lunch_rating === "number" &&
+          row.lunch_rating >= 1 &&
+          row.lunch_rating <= 5 &&
+          row.lunch_comment?.trim()
+        ) {
+          reviewList.push({
+            id: `${row.id}-lunch`,
+            customerName,
+            rating: row.lunch_rating,
+            comment: row.lunch_comment.trim(),
+            meal: "Lunch",
+            date: row.attendance_date,
+          });
         }
+
+        // Dinner review
+        if (
+          row.dinner_review_approved === true &&
+          typeof row.dinner_rating === "number" &&
+          row.dinner_rating >= 1 &&
+          row.dinner_rating <= 5 &&
+          row.dinner_comment?.trim()
+        ) {
+          reviewList.push({
+            id: `${row.id}-dinner`,
+            customerName,
+            rating: row.dinner_rating,
+            comment: row.dinner_comment.trim(),
+            meal: "Dinner",
+            date: row.attendance_date,
+          });
+        }
+      });
+
+      reviewList.sort(
+        (a, b) =>
+          new Date(b.date).getTime() - new Date(a.date).getTime()
       );
 
-      /*
-       * Latest reviews first.
-       */
-
-      reviewList.sort((a, b) =>
-        b.date.localeCompare(a.date)
-      );
-
-      /*
-       * Show maximum 8 approved reviews.
-       */
-
-      setReviews(
-        reviewList.slice(0, 8)
-      );
-    } catch (error) {
-      console.error(
-        "Unexpected review error:",
-        error
-      );
-
-      setReviews([]);
-    } finally {
+      setReviews(reviewList.slice(0, 8));
       setLoading(false);
-    }
+    };
+
+    fetchReviews();
+  }, []);
+
+  if (loading) {
+    return (
+      <section className="bg-white py-14 md:py-16">
+        <div className="mx-auto max-w-7xl px-4">
+          <div className="text-center">
+            <p className="text-sm text-gray-500">Loading reviews...</p>
+          </div>
+        </div>
+      </section>
+    );
   }
 
   return (
-    <section
-      id="reviews"
-      className="bg-orange-50 py-24"
-    >
-      <div className="mx-auto max-w-7xl px-6">
+    <section className="bg-white py-14 md:py-16">
+      <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
 
-        {/* HEADER */}
+        {/* Heading */}
+        <div className="mx-auto max-w-2xl text-center">
+          <motion.div
+            initial={{ opacity: 0, y: 15 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+            transition={{ duration: 0.5 }}
+          >
+            <p className="mb-2 text-sm font-semibold uppercase tracking-wider text-orange-600">
+              Customer Reviews
+            </p>
 
-        <motion.div
-          initial={{
-            opacity: 0,
-            y: 40,
-          }}
-          whileInView={{
-            opacity: 1,
-            y: 0,
-          }}
-          transition={{
-            duration: 0.8,
-          }}
-          viewport={{
-            once: true,
-          }}
-          className="text-center"
-        >
-          <span className="inline-block rounded-full bg-orange-100 px-4 py-2 text-sm font-semibold text-orange-600">
-            ⭐ Customer Feedback
-          </span>
+            <h2 className="text-3xl font-bold text-gray-900 md:text-4xl">
+              What Our Customers Say
+            </h2>
 
-          <h2 className="mt-5 text-4xl font-bold text-gray-900 md:text-5xl">
-            Customer Reviews
-          </h2>
+            <p className="mt-3 text-gray-600">
+              Real feedback from people enjoying Lazzat Tiffin every day.
+            </p>
+          </motion.div>
+        </div>
 
-          <p className="mx-auto mt-4 max-w-2xl text-gray-600">
-            Real feedback from our Lazzat Tiffin
-            customers.
-          </p>
-        </motion.div>
+        {/* Reviews */}
+        {reviews.length > 0 ? (
+          <div className="mt-8 grid gap-5 md:grid-cols-2 lg:grid-cols-3">
+            {reviews.map((review, index) => (
+              <motion.div
+                key={review.id}
+                initial={{ opacity: 0, y: 15 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                viewport={{ once: true }}
+                transition={{
+                  duration: 0.4,
+                  delay: index * 0.05,
+                }}
+                className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm"
+              >
+                {/* Stars */}
+                <div className="flex items-center gap-1">
+                  {Array.from({ length: 5 }).map((_, starIndex) => (
+                    <span
+                      key={starIndex}
+                      className={
+                        starIndex < review.rating
+                          ? "text-yellow-400"
+                          : "text-gray-300"
+                      }
+                    >
+                      ★
+                    </span>
+                  ))}
+                </div>
 
-        {/* LOADING */}
+                {/* Comment */}
+                <p className="mt-3 text-sm leading-6 text-gray-700">
+                  “{review.comment}”
+                </p>
 
-        {loading && (
-          <div className="mt-14 text-center">
-            <div className="inline-flex items-center gap-3 rounded-xl bg-white px-6 py-4 text-gray-600 shadow">
-              <span className="animate-spin">
-                ⏳
-              </span>
+                {/* Customer */}
+                <div className="mt-4 flex items-center gap-3 border-t border-gray-100 pt-4">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-full bg-orange-100 text-sm font-bold text-orange-600">
+                    {review.customerName.charAt(0).toUpperCase()}
+                  </div>
 
-              Loading customer reviews...
-            </div>
+                  <div className="min-w-0">
+                    <h3 className="truncate text-sm font-semibold text-gray-900">
+                      {review.customerName}
+                    </h3>
+
+                    <p className="text-xs text-gray-500">
+                      Lazzat Tiffin Customer • {review.meal}
+                    </p>
+                  </div>
+                </div>
+              </motion.div>
+            ))}
+          </div>
+        ) : (
+          <div className="mt-8 text-center">
+            <p className="text-gray-500">
+              No customer reviews yet.
+            </p>
           </div>
         )}
 
-        {/* NO REVIEWS */}
-
-        {!loading &&
-          reviews.length === 0 && (
-            <motion.div
-              initial={{
-                opacity: 0,
-                y: 30,
-              }}
-              whileInView={{
-                opacity: 1,
-                y: 0,
-              }}
-              transition={{
-                duration: 0.6,
-              }}
-              viewport={{
-                once: true,
-              }}
-              className="mx-auto mt-14 max-w-2xl rounded-3xl border border-orange-100 bg-white p-10 text-center shadow-lg"
-            >
-              <div className="text-5xl">
-                ⭐
-              </div>
-
-              <h3 className="mt-5 text-2xl font-bold text-gray-900">
-                No reviews yet
-              </h3>
-
-              <p className="mt-3 text-gray-600">
-                Customer reviews will appear
-                here after they are approved.
-              </p>
-            </motion.div>
-          )}
-
-        {/* REVIEWS */}
-
-        {!loading &&
-          reviews.length > 0 && (
-            <div className="mt-14 grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-              {reviews.map(
-                (review, index) => (
-                  <motion.div
-                    key={review.id}
-                    initial={{
-                      opacity: 0,
-                      y: 40,
-                    }}
-                    whileInView={{
-                      opacity: 1,
-                      y: 0,
-                    }}
-                    transition={{
-                      duration: 0.6,
-                      delay:
-                        index * 0.08,
-                    }}
-                    viewport={{
-                      once: true,
-                    }}
-                    className="rounded-3xl border border-orange-100 bg-white p-7 shadow-lg transition duration-300 hover:-translate-y-1 hover:shadow-xl"
-                  >
-
-                    {/* TOP */}
-
-                    <div className="flex items-center justify-between gap-3">
-
-                      <div className="flex items-center gap-1">
-                        {Array.from({
-                          length: 5,
-                        }).map(
-                          (_, starIndex) => (
-                            <span
-                              key={
-                                starIndex
-                              }
-                              className={
-                                starIndex <
-                                review.rating
-                                  ? "text-xl"
-                                  : "text-xl opacity-20"
-                              }
-                            >
-                              ⭐
-                            </span>
-                          )
-                        )}
-                      </div>
-
-                      <span className="rounded-full bg-orange-100 px-3 py-1 text-xs font-semibold text-orange-700">
-                        {review.meal ===
-                        "Lunch"
-                          ? "🍛 Lunch"
-                          : "🌙 Dinner"}
-                      </span>
-
-                    </div>
-
-                    {/* COMMENT */}
-
-                    <p className="mt-6 min-h-[90px] text-lg leading-7 text-gray-700">
-                      "{review.comment}"
-                    </p>
-
-                    {/* CUSTOMER */}
-
-                    <div className="mt-6 flex items-center gap-3 border-t border-orange-100 pt-5">
-
-                      <div className="flex h-11 w-11 items-center justify-center rounded-full bg-orange-500 font-bold text-white">
-                        {review.customerName
-                          .charAt(0)
-                          .toUpperCase()}
-                      </div>
-
-                      <div>
-                        <h3 className="font-bold text-gray-900">
-                          {review.customerName}
-                        </h3>
-
-                        <p className="text-xs text-gray-500">
-                          Lazzat Tiffin Customer
-                        </p>
-                      </div>
-
-                    </div>
-
-                  </motion.div>
-                )
-              )}
-            </div>
-          )}
-
-        {/* BOTTOM */}
-
-        {!loading &&
-          reviews.length > 0 && (
-            <motion.div
-              initial={{
-                opacity: 0,
-                scale: 0.95,
-              }}
-              whileInView={{
-                opacity: 1,
-                scale: 1,
-              }}
-              transition={{
-                duration: 0.7,
-              }}
-              viewport={{
-                once: true,
-              }}
-              className="mx-auto mt-14 max-w-3xl rounded-3xl bg-orange-500 p-8 text-center text-white shadow-xl"
-            >
-              <div className="text-3xl">
-                ❤️
-              </div>
-
-              <h3 className="mt-3 text-2xl font-bold">
-                Loved by our customers
-              </h3>
-
-              <p className="mt-2 text-orange-100">
-                Thank you for choosing
-                Lazzat Tiffin!
-              </p>
-            </motion.div>
-          )}
-
+        {/* Bottom message */}
+        {reviews.length > 0 && (
+          <motion.div
+            initial={{ opacity: 0, y: 15 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+            className="mt-8 text-center"
+          >
+            <p className="text-sm text-gray-500">
+              Your feedback helps us serve you better ❤️
+            </p>
+          </motion.div>
+        )}
       </div>
     </section>
   );
