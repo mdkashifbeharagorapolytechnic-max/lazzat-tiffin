@@ -1,620 +1,1545 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useParams } from "next/navigation";
-import { createClient } from "@supabase/supabase-js";
-
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY!
-);
+import Link from "next/link";
+import { supabase } from "@/lib/supabase";
 
 type Customer = {
   id: string;
   name: string;
   phone: string | null;
-  address: string | null;
   lunch_rate: number | null;
   dinner_rate: number | null;
   active: boolean;
+  start_date: string | null;
 };
 
-type Bill = {
+type Attendance = {
+  customer_id: string;
+  attendance_date: string;
+  lunch: boolean | null;
+  dinner: boolean | null;
+};
+
+type ExtraMealRequest = {
+  id: string;
+  customer_id: string;
+  status: string;
+  quantity: number | null;
+};
+
+type ExtraMealRequestDay = {
+  request_id: string;
+  meal_date: string;
+  meal_type: "lunch" | "dinner";
+  included: boolean;
+};
+
+type ExistingBilling = {
   id: string;
   customer_id: string;
   billing_month: string;
+
   lunch_count: number;
   dinner_count: number;
+
   lunch_rate: number;
   dinner_rate: number;
+
   lunch_amount: number;
   dinner_amount: number;
+
+  extra_lunch_count: number;
+  extra_dinner_count: number;
+
+  extra_lunch_amount: number;
+  extra_dinner_amount: number;
+
   total_amount: number;
+
   paid_amount: number;
   due_amount: number;
+
   payment_status: "pending" | "partial" | "paid";
 };
 
-export default function CustomerBillPage() {
-  const params = useParams();
-  const customerId = params.customerId as string;
+type BillingRow = {
+  id?: string;
+
+  customer_id: string;
+  billing_month: string;
+
+  lunch_count: number;
+  dinner_count: number;
+
+  lunch_rate: number;
+  dinner_rate: number;
+
+  lunch_amount: number;
+  dinner_amount: number;
+
+  extra_lunch_count: number;
+  extra_dinner_count: number;
+
+  extra_lunch_amount: number;
+  extra_dinner_amount: number;
+
+  total_amount: number;
+
+  paid_amount: number;
+  due_amount: number;
+
+  payment_status: "pending" | "partial" | "paid";
+};
+
+export default function BillingPage() {
+  // =========================================================
+  // MONTH
+  // =========================================================
 
   const [month, setMonth] = useState(
     new Date().toISOString().slice(0, 7)
   );
 
-  const [customer, setCustomer] =
-    useState<Customer | null>(null);
+  // =========================================================
+  // STATE
+  // =========================================================
 
-  const [bill, setBill] =
-    useState<Bill | null>(null);
+  const [customers, setCustomers] = useState<Customer[]>([]);
+  const [billing, setBilling] = useState<BillingRow[]>([]);
 
   const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState<string | null>(null);
   const [error, setError] = useState("");
 
-  async function loadBill() {
+  // =========================================================
+  // LOAD BILLING
+  // =========================================================
+
+  async function loadBilling() {
     try {
       setLoading(true);
       setError("");
 
-      const billingMonth = `${month}-01`;
+      // =====================================================
+      // MONTH RANGE
+      // =====================================================
 
-      // =========================
-      // CUSTOMER
-      // =========================
+      const year = Number(month.slice(0, 4));
+      const monthNumber = Number(month.slice(5, 7));
 
-      const { data: customerData, error: customerError } =
-        await supabase
-          .from("customers")
-          .select(
-            "id,name,phone,address,lunch_rate,dinner_rate,active"
-          )
-          .eq("id", customerId)
-          .single();
+      const monthStart = `${month}-01`;
+
+      const nextMonthDate = new Date(
+        year,
+        monthNumber,
+        1
+      );
+
+      const monthEnd =
+        `${nextMonthDate.getFullYear()}-${String(
+          nextMonthDate.getMonth() + 1
+        ).padStart(2, "0")}-01`;
+
+      // =====================================================
+      // CUSTOMERS
+      // =====================================================
+
+      const {
+        data: customerData,
+        error: customerError,
+      } = await supabase
+        .from("customers")
+        .select("*")
+        .order("name");
+
+      console.log(
+        "CUSTOMER DATA:",
+        customerData
+      );
+
+      console.log(
+        "CUSTOMER ERROR:",
+        customerError
+      );
 
       if (customerError) {
-        throw new Error(customerError.message);
+        throw new Error(
+          customerError.message
+        );
       }
 
-      setCustomer(customerData);
+      // IMPORTANT:
+      // We filter active customers in JavaScript
+      // instead of using .eq("active", true)
 
-      // =========================
-      // BILL
-      // =========================
+      const customerList = (
+        customerData || []
+      ).filter(
+        (customer) =>
+          customer.active === true
+      ) as Customer[];
 
-      const { data: billData, error: billError } =
-        await supabase
-          .from("billing")
-          .select("*")
-          .eq("customer_id", customerId)
-          .eq("billing_month", billingMonth)
-          .maybeSingle();
+      console.log(
+        "ACTIVE CUSTOMERS:",
+        customerList
+      );
 
-      if (billError) {
-        throw new Error(billError.message);
+      setCustomers(customerList);
+
+      if (customerList.length === 0) {
+        setBilling([]);
+        return;
       }
 
-      setBill(billData);
+      const customerIds =
+        customerList.map(
+          (customer) => customer.id
+        );
+
+      // =====================================================
+      // ATTENDANCE
+      // =====================================================
+
+      const {
+        data: attendanceData,
+        error: attendanceError,
+      } = await supabase
+        .from("attendance")
+        .select(
+          "customer_id,attendance_date,lunch,dinner"
+        )
+        .in(
+          "customer_id",
+          customerIds
+        )
+        .gte(
+          "attendance_date",
+          monthStart
+        )
+        .lt(
+          "attendance_date",
+          monthEnd
+        );
+
+      if (attendanceError) {
+        throw new Error(
+          attendanceError.message
+        );
+      }
+
+      const attendanceList =
+        (attendanceData ||
+          []) as Attendance[];
+
+      // =====================================================
+      // EXTRA MEAL REQUESTS
+      // =====================================================
+
+      const {
+        data: extraRequestsData,
+        error: extraRequestsError,
+      } = await supabase
+        .from("extra_meal_requests")
+        .select(
+          "id,customer_id,status,quantity"
+        )
+        .in(
+          "customer_id",
+          customerIds
+        )
+        .eq(
+          "status",
+          "approved"
+        );
+
+      if (extraRequestsError) {
+        throw new Error(
+          extraRequestsError.message
+        );
+      }
+
+      const approvedExtraRequests =
+        (extraRequestsData ||
+          []) as ExtraMealRequest[];
+
+      // =====================================================
+      // EXTRA REQUEST IDS
+      // =====================================================
+
+      const extraRequestIds =
+        approvedExtraRequests.map(
+          (request) => request.id
+        );
+
+      // =====================================================
+      // EXTRA MEAL REQUEST DAYS
+      // =====================================================
+
+      let extraMealDays: ExtraMealRequestDay[] =
+        [];
+
+      if (
+        extraRequestIds.length > 0
+      ) {
+        const {
+          data: extraDaysData,
+          error: extraDaysError,
+        } = await supabase
+          .from(
+            "extra_meal_request_days"
+          )
+          .select(
+            "request_id,meal_date,meal_type,included"
+          )
+          .in(
+            "request_id",
+            extraRequestIds
+          )
+          .gte(
+            "meal_date",
+            monthStart
+          )
+          .lt(
+            "meal_date",
+            monthEnd
+          )
+          .eq(
+            "included",
+            true
+          );
+
+        if (extraDaysError) {
+          throw new Error(
+            extraDaysError.message
+          );
+        }
+
+        extraMealDays =
+          (extraDaysData ||
+            []) as ExtraMealRequestDay[];
+      }
+
+      // =====================================================
+      // EXISTING BILLING
+      // =====================================================
+
+      const {
+        data: billingData,
+        error: billingError,
+      } = await supabase
+        .from("billing")
+        .select("*")
+        .eq(
+          "billing_month",
+          monthStart
+        );
+
+      if (billingError) {
+        throw new Error(
+          billingError.message
+        );
+      }
+
+      const existingBilling =
+        (billingData ||
+          []) as ExistingBilling[];
+
+      // =====================================================
+      // CALCULATE BILLING
+      // =====================================================
+
+      const rows: BillingRow[] =
+        customerList.map(
+          (customer) => {
+            // =================================================
+            // CUSTOMER ATTENDANCE
+            // =================================================
+
+            const customerAttendance =
+              attendanceList.filter(
+                (item) =>
+                  item.customer_id ===
+                  customer.id
+              );
+
+            // =================================================
+            // NORMAL LUNCH COUNT
+            // =================================================
+
+            const lunchCount =
+              customerAttendance.filter(
+                (item) =>
+                  item.lunch === true
+              ).length;
+
+            // =================================================
+            // NORMAL DINNER COUNT
+            // =================================================
+
+            const dinnerCount =
+              customerAttendance.filter(
+                (item) =>
+                  item.dinner === true
+              ).length;
+
+            // =================================================
+            // RATES
+            // =================================================
+
+            const lunchRate =
+              Number(
+                customer.lunch_rate ||
+                  0
+              );
+
+            const dinnerRate =
+              Number(
+                customer.dinner_rate ||
+                  0
+              );
+
+            // =================================================
+            // NORMAL AMOUNTS
+            // =================================================
+
+            const lunchAmount =
+              lunchCount *
+              lunchRate;
+
+            const dinnerAmount =
+              dinnerCount *
+              dinnerRate;
+
+            // =================================================
+            // CUSTOMER EXTRA REQUESTS
+            // =================================================
+
+            const customerExtraRequests =
+              approvedExtraRequests.filter(
+                (request) =>
+                  request.customer_id ===
+                  customer.id
+              );
+
+            const customerRequestIds =
+              new Set(
+                customerExtraRequests.map(
+                  (request) =>
+                    request.id
+                )
+              );
+
+            // =================================================
+            // CUSTOMER EXTRA DAYS
+            // =================================================
+
+            const customerExtraDays =
+              extraMealDays.filter(
+                (day) =>
+                  customerRequestIds.has(
+                    day.request_id
+                  )
+              );
+
+            // =================================================
+            // EXTRA LUNCH COUNT
+            // =================================================
+
+            const extraLunchCount =
+              customerExtraDays
+                .filter(
+                  (day) =>
+                    day.meal_type ===
+                    "lunch"
+                )
+                .reduce(
+                  (total, day) => {
+                    const request =
+                      customerExtraRequests.find(
+                        (item) =>
+                          item.id ===
+                          day.request_id
+                      );
+
+                    return (
+                      total +
+                      Number(
+                        request?.quantity ||
+                          0
+                      )
+                    );
+                  },
+                  0
+                );
+
+            // =================================================
+            // EXTRA DINNER COUNT
+            // =================================================
+
+            const extraDinnerCount =
+              customerExtraDays
+                .filter(
+                  (day) =>
+                    day.meal_type ===
+                    "dinner"
+                )
+                .reduce(
+                  (total, day) => {
+                    const request =
+                      customerExtraRequests.find(
+                        (item) =>
+                          item.id ===
+                          day.request_id
+                      );
+
+                    return (
+                      total +
+                      Number(
+                        request?.quantity ||
+                          0
+                      )
+                    );
+                  },
+                  0
+                );
+
+            // =================================================
+            // EXTRA AMOUNTS
+            // =================================================
+
+            const extraLunchAmount =
+              extraLunchCount *
+              lunchRate;
+
+            const extraDinnerAmount =
+              extraDinnerCount *
+              dinnerRate;
+
+            // =================================================
+            // TOTAL
+            // =================================================
+
+            const totalAmount =
+              lunchAmount +
+              dinnerAmount +
+              extraLunchAmount +
+              extraDinnerAmount;
+
+            // =================================================
+            // EXISTING BILL
+            // =================================================
+
+            const existing =
+              existingBilling.find(
+                (item) =>
+                  item.customer_id ===
+                  customer.id
+              );
+
+            // =================================================
+            // PAID
+            // =================================================
+
+            const paidAmount =
+              Math.max(
+                Number(
+                  existing?.paid_amount ||
+                    0
+                ),
+                0
+              );
+
+            // =================================================
+            // DUE
+            // =================================================
+
+            const dueAmount =
+              Math.max(
+                totalAmount -
+                  paidAmount,
+                0
+              );
+
+            // =================================================
+            // PAYMENT STATUS
+            // =================================================
+
+            let paymentStatus:
+              | "pending"
+              | "partial"
+              | "paid" =
+              "pending";
+
+            if (
+              totalAmount > 0 &&
+              paidAmount >=
+                totalAmount
+            ) {
+              paymentStatus = "paid";
+            } else if (
+              paidAmount > 0
+            ) {
+              paymentStatus = "partial";
+            }
+
+            // =================================================
+            // DEBUG
+            // =================================================
+
+            console.log(
+              "BILLING CUSTOMER:",
+              customer.name,
+              {
+                lunchCount,
+                dinnerCount,
+                extraLunchCount,
+                extraDinnerCount,
+                lunchAmount,
+                dinnerAmount,
+                extraLunchAmount,
+                extraDinnerAmount,
+                totalAmount,
+              }
+            );
+
+            // =================================================
+            // RETURN ROW
+            // =================================================
+
+            return {
+              id: existing?.id,
+
+              customer_id:
+                customer.id,
+
+              billing_month:
+                monthStart,
+
+              lunch_count:
+                lunchCount,
+
+              dinner_count:
+                dinnerCount,
+
+              lunch_rate:
+                lunchRate,
+
+              dinner_rate:
+                dinnerRate,
+
+              lunch_amount:
+                lunchAmount,
+
+              dinner_amount:
+                dinnerAmount,
+
+              extra_lunch_count:
+                extraLunchCount,
+
+              extra_dinner_count:
+                extraDinnerCount,
+
+              extra_lunch_amount:
+                extraLunchAmount,
+
+              extra_dinner_amount:
+                extraDinnerAmount,
+
+              total_amount:
+                totalAmount,
+
+              paid_amount:
+                paidAmount,
+
+              due_amount:
+                dueAmount,
+
+              payment_status:
+                paymentStatus,
+            };
+          }
+        );
+
+      setBilling(rows);
     } catch (err) {
-      console.error(err);
+      console.error(
+        "Billing error:",
+        err
+      );
 
       setError(
         err instanceof Error
           ? err.message
-          : "Unable to load bill."
+          : "Something went wrong."
       );
     } finally {
       setLoading(false);
     }
   }
 
+  // =========================================================
+  // LOAD WHEN MONTH CHANGES
+  // =========================================================
+
   useEffect(() => {
-    if (customerId) {
-      loadBill();
-    }
-  }, [customerId, month]);
+    loadBilling();
+  }, [month]);
 
-  // =========================
-  // PRINT / PDF
-  // =========================
+  // =========================================================
+  // UPDATE PAID AMOUNT
+  // =========================================================
 
-  function printBill() {
-    window.print();
-  }
-
-  // =========================
-  // WHATSAPP
-  // =========================
-
-  function sendWhatsApp() {
-    if (!customer) {
-      alert("Customer information not available.");
-      return;
-    }
-
-    if (!bill) {
-      alert(
-        "No billing record found for this month."
+  function updatePaidAmount(
+    customerId: string,
+    value: string
+  ) {
+    const paid =
+      Math.max(
+        Number(value || 0),
+        0
       );
-      return;
-    }
 
-    const phone =
-      customer.phone?.replace(/\D/g, "");
+    setBilling(
+      (current) =>
+        current.map(
+          (row) => {
+            if (
+              row.customer_id !==
+              customerId
+            ) {
+              return row;
+            }
 
-    if (!phone) {
-      alert(
-        "Customer phone number is not available."
+            const due =
+              Math.max(
+                row.total_amount -
+                  paid,
+                0
+              );
+
+            let status:
+              | "pending"
+              | "partial"
+              | "paid" =
+              "pending";
+
+            if (
+              row.total_amount >
+                0 &&
+              paid >=
+                row.total_amount
+            ) {
+              status = "paid";
+            } else if (
+              paid > 0
+            ) {
+              status = "partial";
+            }
+
+            return {
+              ...row,
+              paid_amount:
+                paid,
+              due_amount:
+                due,
+              payment_status:
+                status,
+            };
+          }
+        )
+    );
+  }
+
+  // =========================================================
+  // SAVE PAYMENT
+  // =========================================================
+
+  async function savePayment(
+    row: BillingRow
+  ) {
+    try {
+      setSaving(
+        row.customer_id
       );
-      return;
+
+      setError("");
+
+      const paidAmount =
+        Math.max(
+          Number(
+            row.paid_amount || 0
+          ),
+          0
+        );
+
+      const dueAmount =
+        Math.max(
+          Number(
+            row.total_amount || 0
+          ) -
+            paidAmount,
+          0
+        );
+
+      let paymentStatus:
+        | "pending"
+        | "partial"
+        | "paid" =
+        "pending";
+
+      if (
+        row.total_amount > 0 &&
+        paidAmount >=
+          row.total_amount
+      ) {
+        paymentStatus = "paid";
+      } else if (
+        paidAmount > 0
+      ) {
+        paymentStatus = "partial";
+      }
+
+      // =====================================================
+      // PAYLOAD
+      // =====================================================
+
+      const payload = {
+        customer_id:
+          row.customer_id,
+
+        billing_month:
+          row.billing_month,
+
+        lunch_count:
+          row.lunch_count,
+
+        dinner_count:
+          row.dinner_count,
+
+        lunch_rate:
+          row.lunch_rate,
+
+        dinner_rate:
+          row.dinner_rate,
+
+        lunch_amount:
+          row.lunch_amount,
+
+        dinner_amount:
+          row.dinner_amount,
+
+        extra_lunch_count:
+          row.extra_lunch_count,
+
+        extra_dinner_count:
+          row.extra_dinner_count,
+
+        extra_lunch_amount:
+          row.extra_lunch_amount,
+
+        extra_dinner_amount:
+          row.extra_dinner_amount,
+
+        total_amount:
+          row.total_amount,
+
+        paid_amount:
+          paidAmount,
+
+        due_amount:
+          dueAmount,
+
+        payment_status:
+          paymentStatus,
+      };
+
+      // =====================================================
+      // UPDATE EXISTING BILL
+      // =====================================================
+
+      if (row.id) {
+        const {
+          error: updateError,
+        } = await supabase
+          .from("billing")
+          .update(payload)
+          .eq(
+            "id",
+            row.id
+          );
+
+        if (updateError) {
+          throw new Error(
+            updateError.message
+          );
+        }
+      }
+
+      // =====================================================
+      // INSERT NEW BILL
+      // =====================================================
+
+      else {
+        const {
+          data,
+          error: insertError,
+        } = await supabase
+          .from("billing")
+          .insert(payload)
+          .select()
+          .single();
+
+        if (insertError) {
+          throw new Error(
+            insertError.message
+          );
+        }
+
+        setBilling(
+          (current) =>
+            current.map(
+              (item) =>
+                item.customer_id ===
+                row.customer_id
+                  ? {
+                      ...item,
+                      id: data.id,
+                    }
+                  : item
+            )
+        );
+      }
+
+      // =====================================================
+      // UPDATE LOCAL STATE
+      // =====================================================
+
+      setBilling(
+        (current) =>
+          current.map(
+            (item) =>
+              item.customer_id ===
+              row.customer_id
+                ? {
+                    ...item,
+
+                    paid_amount:
+                      paidAmount,
+
+                    due_amount:
+                      dueAmount,
+
+                    payment_status:
+                      paymentStatus,
+                  }
+                : item
+          )
+      );
+
+      alert(
+        "Payment updated successfully."
+      );
+    } catch (err) {
+      console.error(
+        "Payment error:",
+        err
+      );
+
+      setError(
+        err instanceof Error
+          ? err.message
+          : "Payment update failed."
+      );
+    } finally {
+      setSaving(null);
     }
-
-    const whatsappNumber =
-      phone.length === 10
-        ? `91${phone}`
-        : phone;
-
-    const monthName = new Date(
-      `${month}-01T00:00:00`
-    ).toLocaleDateString("en-IN", {
-      month: "long",
-      year: "numeric",
-    });
-
-    const status =
-      bill.payment_status === "paid"
-        ? "✅ PAID"
-        : bill.payment_status === "partial"
-        ? "🟡 PARTIAL PAYMENT"
-        : "🔴 PAYMENT PENDING";
-
-    const message = `
-🍱 *LAZZAT TIFFIN*
-━━━━━━━━━━━━━━━━━━━━
-
-🧾 *MONTHLY BILL*
-
-👤 *Customer:* ${customer.name}
-📅 *Month:* ${monthName}
-
-━━━━━━━━━━━━━━━━━━━━
-
-🍛 *LUNCH*
-
-Tiffins: ${bill.lunch_count}
-Rate: ₹${bill.lunch_rate}
-Amount: ₹${bill.lunch_amount}
-
-🌙 *DINNER*
-
-Tiffins: ${bill.dinner_count}
-Rate: ₹${bill.dinner_rate}
-Amount: ₹${bill.dinner_amount}
-
-━━━━━━━━━━━━━━━━━━━━
-
-💰 *BILL SUMMARY*
-
-Total Bill: ₹${bill.total_amount}
-Paid: ₹${bill.paid_amount}
-Due: ₹${bill.due_amount}
-
-Status: ${status}
-
-━━━━━━━━━━━━━━━━━━━━
-
-Thank you for choosing *Lazzat Tiffin* ❤️
-
-Fresh Homemade Food
-Healthy Tiffin Delivered Daily
-
-📞 Contact: 9955672533
-📍 Jamshedpur
-
-Please contact us if you have any questions regarding your bill.
-`;
-
-    const whatsappUrl =
-      `https://wa.me/${whatsappNumber}?text=` +
-      encodeURIComponent(message);
-
-    window.open(
-      whatsappUrl,
-      "_blank",
-      "noopener,noreferrer"
-    );
   }
 
-  // =========================
-  // LOADING
-  // =========================
+  // =========================================================
+  // SUMMARY
+  // =========================================================
 
-  if (loading) {
-    return (
-      <main className="min-h-screen bg-gray-100 p-6">
-
-        <div className="mx-auto max-w-3xl rounded-2xl bg-white p-10 text-center shadow">
-
-          <div className="mx-auto mb-4 h-10 w-10 animate-spin rounded-full border-4 border-gray-200 border-t-green-600" />
-
-          <h1 className="text-xl font-bold">
-            Loading Bill...
-          </h1>
-
-          <p className="mt-2 text-gray-500">
-            Please wait
-          </p>
-
-        </div>
-
-      </main>
+  const totalBills =
+    billing.reduce(
+      (sum, row) =>
+        sum +
+        Number(
+          row.total_amount || 0
+        ),
+      0
     );
-  }
 
-  // =========================
-  // ERROR
-  // =========================
-
-  if (error) {
-    return (
-      <main className="min-h-screen bg-gray-100 p-6">
-
-        <div className="mx-auto max-w-3xl rounded-2xl border border-red-200 bg-red-50 p-6 text-red-700">
-
-          <h1 className="text-xl font-bold">
-            Billing Error
-          </h1>
-
-          <p className="mt-2">
-            {error}
-          </p>
-
-        </div>
-
-      </main>
+  const totalPaid =
+    billing.reduce(
+      (sum, row) =>
+        sum +
+        Number(
+          row.paid_amount || 0
+        ),
+      0
     );
-  }
 
-  // =========================
-  // PAGE
-  // =========================
+  const totalDue =
+    billing.reduce(
+      (sum, row) =>
+        sum +
+        Number(
+          row.due_amount || 0
+        ),
+      0
+    );
+
+  const totalExtraLunch =
+    billing.reduce(
+      (sum, row) =>
+        sum +
+        Number(
+          row.extra_lunch_count ||
+            0
+        ),
+      0
+    );
+
+  const totalExtraDinner =
+    billing.reduce(
+      (sum, row) =>
+        sum +
+        Number(
+          row.extra_dinner_count ||
+            0
+        ),
+      0
+    );
+
+  // =========================================================
+  // UI
+  // =========================================================
 
   return (
     <main className="min-h-screen bg-gray-100 p-6">
+      <div className="mx-auto max-w-[1600px]">
 
-      {/* ACTION BAR */}
-
-      <div className="mx-auto mb-6 flex max-w-3xl flex-wrap items-center gap-3 print:hidden">
-
-        <input
-          type="month"
-          value={month}
-          onChange={(e) =>
-            setMonth(e.target.value)
-          }
-          className="rounded-xl border border-gray-300 bg-white p-3 outline-none focus:border-green-500"
-        />
-
-        <button
-          onClick={printBill}
-          className="rounded-xl bg-gray-900 px-5 py-3 font-semibold text-white transition hover:bg-gray-800"
-        >
-          🖨️ Print / PDF
-        </button>
-
-        <button
-          onClick={sendWhatsApp}
-          className="rounded-xl bg-green-600 px-5 py-3 font-semibold text-white transition hover:bg-green-700"
-        >
-          📱 WhatsApp Bill
-        </button>
-
-      </div>
-
-      {/* BILL */}
-
-      <div
-        id="bill"
-        className="mx-auto max-w-3xl overflow-hidden rounded-2xl bg-white shadow-xl print:rounded-none print:shadow-none"
-      >
-
+        {/* ================================================= */}
         {/* HEADER */}
+        {/* ================================================= */}
 
-        <div className="bg-gray-900 px-8 py-8 text-center text-white">
-
-          <h1 className="text-3xl font-bold tracking-wide">
-            LAZZAT TIFFIN
+        <div className="mb-6">
+          <h1 className="text-3xl font-bold text-gray-900">
+            Billing
           </h1>
 
-          <p className="mt-2 text-gray-300">
-            Fresh Homemade Food
+          <p className="mt-2 text-gray-600">
+            Monthly customer billing and payment
+            management
           </p>
-
-          <p className="text-gray-300">
-            Healthy Tiffin Delivered Daily
-          </p>
-
         </div>
 
-        <div className="p-8">
+        {/* ================================================= */}
+        {/* MONTH */}
+        {/* ================================================= */}
 
-          {/* CUSTOMER INFORMATION */}
+        <div className="mb-6 rounded-xl bg-white p-5 shadow">
+          <label className="mb-2 block font-semibold">
+            Billing Month
+          </label>
 
-          <div className="grid gap-6 border-b pb-6 md:grid-cols-2">
+          <input
+            type="month"
+            value={month}
+            onChange={(e) =>
+              setMonth(
+                e.target.value
+              )
+            }
+            className="rounded-lg border border-gray-300 p-3 outline-none focus:border-blue-500"
+          />
+        </div>
 
-            <div>
+        {/* ================================================= */}
+        {/* ERROR */}
+        {/* ================================================= */}
 
-              <p className="text-sm font-medium text-gray-500">
-                CUSTOMER
-              </p>
+        {error && (
+          <div className="mb-6 rounded-xl border border-red-300 bg-red-50 p-4 text-red-700">
+            <p className="font-bold">
+              Billing Error
+            </p>
 
-              <h2 className="mt-1 text-2xl font-bold text-gray-900">
-                {customer?.name}
-              </h2>
-
-              {customer?.phone && (
-                <p className="mt-1 text-gray-600">
-                  📞 {customer.phone}
-                </p>
-              )}
-
-              {customer?.address && (
-                <p className="mt-1 text-gray-600">
-                  📍 {customer.address}
-                </p>
-              )}
-
-            </div>
-
-            <div className="md:text-right">
-
-              <p className="text-sm font-medium text-gray-500">
-                BILLING MONTH
-              </p>
-
-              <p className="mt-1 text-2xl font-bold text-gray-900">
-                {new Date(
-                  `${month}-01T00:00:00`
-                ).toLocaleDateString("en-IN", {
-                  month: "long",
-                  year: "numeric",
-                })}
-              </p>
-
-            </div>
-
+            <p className="mt-1">
+              {error}
+            </p>
           </div>
+        )}
 
-          {/* BILL TABLE */}
+        {/* ================================================= */}
+        {/* SUMMARY */}
+        {/* ================================================= */}
 
-          <div className="mt-8 overflow-hidden rounded-xl border">
+        {!loading &&
+          billing.length > 0 && (
+            <>
+              <div className="mb-6 grid gap-4 md:grid-cols-3">
 
-            <table className="w-full">
+                {/* TOTAL BILLS */}
 
-              <thead className="bg-gray-900 text-white">
+                <div className="rounded-xl bg-white p-5 shadow">
+                  <p className="text-sm text-gray-500">
+                    Total Bills
+                  </p>
 
-                <tr>
+                  <p className="mt-2 text-2xl font-bold">
+                    ₹
+                    {totalBills.toFixed(
+                      2
+                    )}
+                  </p>
+                </div>
 
-                  <th className="px-4 py-4 text-left">
-                    Item
-                  </th>
+                {/* TOTAL PAID */}
 
-                  <th className="px-4 py-4 text-center">
-                    Tiffins
-                  </th>
+                <div className="rounded-xl bg-white p-5 shadow">
+                  <p className="text-sm text-gray-500">
+                    Total Paid
+                  </p>
 
-                  <th className="px-4 py-4 text-right">
-                    Rate
-                  </th>
+                  <p className="mt-2 text-2xl font-bold text-green-600">
+                    ₹
+                    {totalPaid.toFixed(
+                      2
+                    )}
+                  </p>
+                </div>
 
-                  <th className="px-4 py-4 text-right">
-                    Amount
-                  </th>
+                {/* TOTAL DUE */}
 
-                </tr>
+                <div className="rounded-xl bg-white p-5 shadow">
+                  <p className="text-sm text-gray-500">
+                    Total Due
+                  </p>
 
-              </thead>
-
-              <tbody>
-
-                {/* LUNCH */}
-
-                <tr className="border-b">
-
-                  <td className="px-4 py-5">
-
-                    <div className="font-semibold">
-                      🍛 Lunch
-                    </div>
-
-                  </td>
-
-                  <td className="px-4 py-5 text-center">
-                    {bill?.lunch_count || 0}
-                  </td>
-
-                  <td className="px-4 py-5 text-right">
-                    ₹{bill?.lunch_rate || 0}
-                  </td>
-
-                  <td className="px-4 py-5 text-right font-semibold">
-                    ₹{bill?.lunch_amount || 0}
-                  </td>
-
-                </tr>
-
-                {/* DINNER */}
-
-                <tr>
-
-                  <td className="px-4 py-5">
-
-                    <div className="font-semibold">
-                      🌙 Dinner
-                    </div>
-
-                  </td>
-
-                  <td className="px-4 py-5 text-center">
-                    {bill?.dinner_count || 0}
-                  </td>
-
-                  <td className="px-4 py-5 text-right">
-                    ₹{bill?.dinner_rate || 0}
-                  </td>
-
-                  <td className="px-4 py-5 text-right font-semibold">
-                    ₹{bill?.dinner_amount || 0}
-                  </td>
-
-                </tr>
-
-              </tbody>
-
-            </table>
-
-          </div>
-
-          {/* SUMMARY */}
-
-          <div className="mt-8 ml-auto max-w-sm">
-
-            <div className="space-y-4">
-
-              <div className="flex justify-between text-gray-600">
-
-                <span>
-                  Lunch Amount
-                </span>
-
-                <span>
-                  ₹{bill?.lunch_amount || 0}
-                </span>
-
-              </div>
-
-              <div className="flex justify-between text-gray-600">
-
-                <span>
-                  Dinner Amount
-                </span>
-
-                <span>
-                  ₹{bill?.dinner_amount || 0}
-                </span>
-
-              </div>
-
-              <div className="border-t pt-4">
-
-                <div className="flex justify-between text-xl font-bold">
-
-                  <span>
-                    Total Bill
-                  </span>
-
-                  <span>
-                    ₹{bill?.total_amount || 0}
-                  </span>
-
+                  <p className="mt-2 text-2xl font-bold text-red-600">
+                    ₹
+                    {totalDue.toFixed(
+                      2
+                    )}
+                  </p>
                 </div>
 
               </div>
 
-              <div className="flex justify-between text-green-600">
+              {/* ================================================= */}
+              {/* EXTRA MEAL SUMMARY */}
+              {/* ================================================= */}
 
-                <span>
-                  Paid
-                </span>
+              <div className="mb-6 grid gap-4 md:grid-cols-2">
 
-                <span className="font-bold">
-                  ₹{bill?.paid_amount || 0}
-                </span>
+                <div className="rounded-xl border border-green-200 bg-green-50 p-5 shadow-sm">
+                  <p className="text-sm font-semibold text-green-800">
+                    Extra Lunch Meals
+                  </p>
+
+                  <p className="mt-2 text-2xl font-bold text-green-700">
+                    {
+                      totalExtraLunch
+                    }
+                  </p>
+                </div>
+
+                <div className="rounded-xl border border-green-200 bg-green-50 p-5 shadow-sm">
+                  <p className="text-sm font-semibold text-green-800">
+                    Extra Dinner Meals
+                  </p>
+
+                  <p className="mt-2 text-2xl font-bold text-green-700">
+                    {
+                      totalExtraDinner
+                    }
+                  </p>
+                </div>
 
               </div>
+            </>
+          )}
 
-              <div className="flex justify-between text-xl font-bold text-red-600">
+        {/* ================================================= */}
+        {/* TABLE */}
+        {/* ================================================= */}
 
-                <span>
-                  Due
-                </span>
+        <div className="overflow-hidden rounded-xl bg-white shadow">
 
-                <span>
-                  ₹{bill?.due_amount || 0}
-                </span>
+          {loading ? (
+            <div className="p-10 text-center">
 
-              </div>
+              <div className="mx-auto mb-4 h-10 w-10 animate-spin rounded-full border-4 border-gray-200 border-t-blue-600" />
+
+              <p className="text-lg font-semibold">
+                Loading billing...
+              </p>
 
             </div>
+          ) : billing.length === 0 ? (
+            <div className="p-10 text-center">
 
-          </div>
+              <p className="text-lg font-semibold">
+                No active customers found.
+              </p>
 
-          {/* STATUS */}
+              <p className="mt-2 text-sm text-gray-500">
+                Check browser console for
+                customer query details.
+              </p>
 
-          <div className="mt-8 text-center">
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
 
-            <span
-              className={`inline-flex rounded-full px-6 py-3 font-bold ${
-                bill?.payment_status === "paid"
-                  ? "bg-green-100 text-green-700"
-                  : bill?.payment_status === "partial"
-                  ? "bg-yellow-100 text-yellow-700"
-                  : "bg-red-100 text-red-700"
-              }`}
-            >
+              <table className="min-w-[1500px]">
 
-              {bill?.payment_status === "paid"
-                ? "✅ PAID"
-                : bill?.payment_status === "partial"
-                ? "🟡 PARTIAL PAYMENT"
-                : "🔴 PAYMENT PENDING"}
+                {/* ================================================= */}
+                {/* TABLE HEADER */}
+                {/* ================================================= */}
 
-            </span>
+                <thead className="bg-gray-900 text-white">
 
-          </div>
+                  <tr>
 
-          {/* FOOTER */}
+                    <th className="px-4 py-4 text-left">
+                      Customer
+                    </th>
 
-          <div className="mt-10 border-t pt-6 text-center">
+                    <th className="px-4 py-4 text-center">
+                      Lunch
+                    </th>
 
-            <p className="font-semibold text-gray-800">
-              Thank you for choosing Lazzat Tiffin ❤️
-            </p>
+                    <th className="px-4 py-4 text-center">
+                      Dinner
+                    </th>
 
-            <p className="mt-1 text-sm text-gray-500">
-              Fresh • Homemade • Hygienic
-            </p>
+                    <th className="px-4 py-4 text-center">
+                      Extra Lunch
+                    </th>
 
-            <p className="mt-2 text-sm text-gray-500">
-              📞 9955672533 • 📍 Jamshedpur
-            </p>
+                    <th className="px-4 py-4 text-center">
+                      Extra Dinner
+                    </th>
 
-          </div>
+                    <th className="px-4 py-4 text-right">
+                      Lunch ₹
+                    </th>
+
+                    <th className="px-4 py-4 text-right">
+                      Dinner ₹
+                    </th>
+
+                    <th className="px-4 py-4 text-right">
+                      Extra Lunch ₹
+                    </th>
+
+                    <th className="px-4 py-4 text-right">
+                      Extra Dinner ₹
+                    </th>
+
+                    <th className="px-4 py-4 text-right">
+                      Total
+                    </th>
+
+                    <th className="px-4 py-4 text-right">
+                      Paid
+                    </th>
+
+                    <th className="px-4 py-4 text-right">
+                      Due
+                    </th>
+
+                    <th className="px-4 py-4 text-center">
+                      Status
+                    </th>
+
+                    <th className="px-4 py-4 text-center">
+                      Action
+                    </th>
+
+                  </tr>
+
+                </thead>
+
+                {/* ================================================= */}
+                {/* TABLE BODY */}
+                {/* ================================================= */}
+
+                <tbody>
+
+                  {billing.map(
+                    (row) => {
+
+                      const customer =
+                        customers.find(
+                          (item) =>
+                            item.id ===
+                            row.customer_id
+                        );
+
+                      return (
+                        <tr
+                          key={
+                            row.customer_id
+                          }
+                          className="border-b hover:bg-gray-50"
+                        >
+
+                          {/* CUSTOMER */}
+
+                          <td className="px-4 py-4">
+
+                            <p className="font-semibold">
+                              {
+                                customer?.name ||
+                                "Unknown"
+                              }
+                            </p>
+
+                            <p className="text-sm text-gray-500">
+                              {
+                                customer?.phone ||
+                                ""
+                              }
+                            </p>
+
+                          </td>
+
+                          {/* NORMAL LUNCH */}
+
+                          <td className="px-4 py-4 text-center">
+                            {
+                              row.lunch_count
+                            }
+                          </td>
+
+                          {/* NORMAL DINNER */}
+
+                          <td className="px-4 py-4 text-center">
+                            {
+                              row.dinner_count
+                            }
+                          </td>
+
+                          {/* EXTRA LUNCH */}
+
+                          <td className="px-4 py-4 text-center font-bold text-green-700">
+                            {
+                              row.extra_lunch_count
+                            }
+                          </td>
+
+                          {/* EXTRA DINNER */}
+
+                          <td className="px-4 py-4 text-center font-bold text-green-700">
+                            {
+                              row.extra_dinner_count
+                            }
+                          </td>
+
+                          {/* LUNCH AMOUNT */}
+
+                          <td className="px-4 py-4 text-right">
+                            ₹
+                            {row.lunch_amount.toFixed(
+                              2
+                            )}
+                          </td>
+
+                          {/* DINNER AMOUNT */}
+
+                          <td className="px-4 py-4 text-right">
+                            ₹
+                            {row.dinner_amount.toFixed(
+                              2
+                            )}
+                          </td>
+
+                          {/* EXTRA LUNCH AMOUNT */}
+
+                          <td className="px-4 py-4 text-right font-semibold text-green-700">
+                            ₹
+                            {row.extra_lunch_amount.toFixed(
+                              2
+                            )}
+                          </td>
+
+                          {/* EXTRA DINNER AMOUNT */}
+
+                          <td className="px-4 py-4 text-right font-semibold text-green-700">
+                            ₹
+                            {row.extra_dinner_amount.toFixed(
+                              2
+                            )}
+                          </td>
+
+                          {/* TOTAL */}
+
+                          <td className="px-4 py-4 text-right font-bold">
+                            ₹
+                            {row.total_amount.toFixed(
+                              2
+                            )}
+                          </td>
+
+                          {/* PAID */}
+
+                          <td className="px-4 py-4">
+
+                            <input
+                              type="number"
+                              min="0"
+                              value={
+                                row.paid_amount
+                              }
+                              onChange={(
+                                e
+                              ) =>
+                                updatePaidAmount(
+                                  row.customer_id,
+                                  e.target
+                                    .value
+                                )
+                              }
+                              className="w-28 rounded-lg border border-gray-300 p-2 text-right outline-none focus:border-blue-500"
+                            />
+
+                          </td>
+
+                          {/* DUE */}
+
+                          <td className="px-4 py-4 text-right font-bold text-red-600">
+                            ₹
+                            {row.due_amount.toFixed(
+                              2
+                            )}
+                          </td>
+
+                          {/* STATUS */}
+
+                          <td className="px-4 py-4 text-center">
+
+                            <span
+                              className={`inline-block rounded-full px-3 py-1 text-xs font-semibold ${
+                                row.payment_status ===
+                                "paid"
+                                  ? "bg-green-100 text-green-700"
+                                  : row.payment_status ===
+                                    "partial"
+                                  ? "bg-yellow-100 text-yellow-700"
+                                  : "bg-red-100 text-red-700"
+                              }`}
+                            >
+                              {row.payment_status ===
+                              "paid"
+                                ? "Paid"
+                                : row.payment_status ===
+                                  "partial"
+                                ? "Partial"
+                                : "Pending"}
+                            </span>
+
+                          </td>
+
+                          {/* ACTION */}
+
+                          <td className="px-4 py-4">
+
+                            <div className="flex min-w-[130px] flex-col gap-2">
+
+                              {/* SAVE */}
+
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  savePayment(
+                                    row
+                                  )
+                                }
+                                disabled={
+                                  saving ===
+                                  row.customer_id
+                                }
+                                className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
+                              >
+                                {saving ===
+                                row.customer_id
+                                  ? "Saving..."
+                                  : "Save"}
+                              </button>
+
+                              {/* GENERATE BILL */}
+
+                              <Link
+                                href={`/billing/${row.customer_id}`}
+                                className="rounded-lg bg-green-600 px-4 py-2 text-center text-sm font-semibold text-white hover:bg-green-700"
+                              >
+                                Generate Bill
+                              </Link>
+
+                            </div>
+
+                          </td>
+
+                        </tr>
+                      );
+                    }
+                  )}
+
+                </tbody>
+
+              </table>
+
+            </div>
+          )}
+
+        </div>
+
+        {/* ================================================= */}
+        {/* BILLING FORMULA */}
+        {/* ================================================= */}
+
+        <div className="mt-6 rounded-xl bg-blue-50 p-5">
+
+          <h2 className="font-bold text-blue-900">
+            Billing Formula
+          </h2>
+
+          <p className="mt-2 text-blue-800">
+            Lunch Amount = Lunch Present ×
+            Lunch Rate
+          </p>
+
+          <p className="text-blue-800">
+            Dinner Amount = Dinner Present ×
+            Dinner Rate
+          </p>
+
+          <p className="text-blue-800">
+            Extra Lunch Amount = Extra Lunch
+            Guests × Lunch Rate
+          </p>
+
+          <p className="text-blue-800">
+            Extra Dinner Amount = Extra Dinner
+            Guests × Dinner Rate
+          </p>
+
+          <p className="mt-1 font-semibold text-blue-900">
+            Total Bill = Lunch + Dinner +
+            Extra Lunch + Extra Dinner
+          </p>
+
+          <p className="text-blue-800">
+            Due = Total Bill − Paid Amount
+          </p>
 
         </div>
 
       </div>
-
-      {/* PRINT CSS */}
-
-      <style jsx global>{`
-        @media print {
-          body {
-            background: white !important;
-          }
-
-          @page {
-            size: A4;
-            margin: 12mm;
-          }
-
-          #bill {
-            width: 100%;
-            max-width: none;
-          }
-        }
-      `}</style>
-
     </main>
   );
 }

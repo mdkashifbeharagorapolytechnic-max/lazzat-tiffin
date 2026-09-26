@@ -1,21 +1,28 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import Link from "next/link";
+import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/lib/supabase";
 
 type Customer = {
   id: string;
   name: string;
   phone: string | null;
+  active: boolean;
   lunch_rate: number | null;
   dinner_rate: number | null;
-  active: boolean;
   start_date: string | null;
 };
 
-type BillingRow = {
-  id?: string;
+type Attendance = {
+  id: string;
+  customer_id: string;
+  attendance_date: string;
+  lunch: boolean;
+  dinner: boolean;
+};
+
+type Billing = {
+  id: string;
   customer_id: string;
   billing_month: string;
   lunch_count: number;
@@ -27,205 +34,188 @@ type BillingRow = {
   total_amount: number;
   paid_amount: number;
   due_amount: number;
-  payment_status: "pending" | "partial" | "paid";
+  payment_status: string;
+  generated_at: string | null;
 };
 
-export default function BillingPage() {
-  const [month, setMonth] = useState(
-    new Date().toISOString().slice(0, 7)
-  );
+type BillingRow = {
+  customer: Customer;
+  lunchCount: number;
+  dinnerCount: number;
+  lunchRate: number;
+  dinnerRate: number;
+  lunchAmount: number;
+  dinnerAmount: number;
+  totalAmount: number;
+  paidAmount: number;
+  dueAmount: number;
+  paymentStatus: string;
+  billingId: string | null;
+};
+
+function getCurrentMonth() {
+  const now = new Date();
+
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, "0");
+
+  return `${year}-${month}`;
+}
+
+function getBillingMonthDate(month: string) {
+  return `${month}-01`;
+}
+
+function getMonthStart(month: string) {
+  return `${month}-01`;
+}
+
+function getNextMonthStart(month: string) {
+  const [year, monthNumber] = month.split("-").map(Number);
+
+  const date = new Date(year, monthNumber, 1);
+
+  const nextYear = date.getFullYear();
+  const nextMonth = String(date.getMonth() + 1).padStart(2, "0");
+
+  return `${nextYear}-${nextMonth}-01`;
+}
+
+function formatCurrency(amount: number) {
+  return `₹${Number(amount || 0).toLocaleString("en-IN", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  })}`;
+}
+
+function formatMonth(month: string) {
+  if (!month) return "";
+
+  const [year, monthNumber] = month.split("-").map(Number);
+
+  const date = new Date(year, monthNumber - 1, 1);
+
+  return date.toLocaleDateString("en-IN", {
+    month: "long",
+    year: "numeric",
+  });
+}
+
+function getStatus(
+  totalAmount: number,
+  paidAmount: number
+) {
+  const total = Number(totalAmount || 0);
+  const paid = Number(paidAmount || 0);
+
+  if (total <= 0) {
+    return "pending";
+  }
+
+  if (paid >= total) {
+    return "paid";
+  }
+
+  if (paid > 0) {
+    return "partial";
+  }
+
+  return "pending";
+}
+
+export default function AdminBillingPage() {
+  const [selectedMonth, setSelectedMonth] =
+    useState(getCurrentMonth());
 
   const [customers, setCustomers] = useState<Customer[]>([]);
-  const [billing, setBilling] = useState<BillingRow[]>([]);
+  const [attendance, setAttendance] = useState<Attendance[]>([]);
+  const [existingBilling, setExistingBilling] = useState<Billing[]>(
+    []
+  );
+
+  const [paidAmounts, setPaidAmounts] = useState<
+    Record<string, string>
+  >({});
 
   const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState<string | null>(null);
-  const [error, setError] = useState("");
+  const [savingCustomer, setSavingCustomer] = useState<string | null>(
+    null
+  );
+  const [generatingCustomer, setGeneratingCustomer] =
+    useState<string | null>(null);
 
-  async function loadBilling() {
+  const [error, setError] = useState("");
+  const [success, setSuccess] = useState("");
+
+  async function loadBillingData() {
     try {
       setLoading(true);
       setError("");
+      setSuccess("");
 
-      const year = Number(month.slice(0, 4));
-      const monthNumber = Number(month.slice(5, 7));
+      const monthStart = getMonthStart(selectedMonth);
+      const nextMonthStart = getNextMonthStart(selectedMonth);
 
-      const monthStart = `${month}-01`;
-
-      const nextMonthDate = new Date(
-        year,
-        monthNumber,
-        1
-      );
-
-      const monthEnd = `${nextMonthDate.getFullYear()}-${String(
-        nextMonthDate.getMonth() + 1
-      ).padStart(2, "0")}-01`;
-
-      // =========================
-      // CUSTOMERS
-      // =========================
-
-      const { data: customerData, error: customerError } =
-        await supabase
+      const [
+        customersResult,
+        attendanceResult,
+        billingResult,
+      ] = await Promise.all([
+        supabase
           .from("customers")
           .select(
-            "id,name,phone,lunch_rate,dinner_rate,active,start_date"
+            "id,name,phone,active,lunch_rate,dinner_rate,start_date"
           )
           .eq("active", true)
-          .order("name");
+          .order("name", { ascending: true }),
 
-      if (customerError) {
-        throw new Error(customerError.message);
+        supabase
+          .from("attendance")
+          .select(
+            "id,customer_id,attendance_date,lunch,dinner"
+          )
+          .gte("attendance_date", monthStart)
+          .lt("attendance_date", nextMonthStart),
+
+        supabase
+          .from("billing")
+          .select(
+            "id,customer_id,billing_month,lunch_count,dinner_count,lunch_rate,dinner_rate,lunch_amount,dinner_amount,total_amount,paid_amount,due_amount,payment_status,generated_at"
+          )
+          .eq("billing_month", getBillingMonthDate(selectedMonth)),
+      ]);
+
+      if (customersResult.error) {
+        throw customersResult.error;
       }
 
-      const customerList =
-        (customerData || []) as Customer[];
-
-      setCustomers(customerList);
-
-      if (customerList.length === 0) {
-        setBilling([]);
-        return;
+      if (attendanceResult.error) {
+        throw attendanceResult.error;
       }
 
-      // =========================
-      // ATTENDANCE
-      // =========================
-
-      const {
-        data: attendanceData,
-        error: attendanceError,
-      } = await supabase
-        .from("attendance")
-        .select(
-          "customer_id,attendance_date,lunch,dinner"
-        )
-        .gte("attendance_date", monthStart)
-        .lt("attendance_date", monthEnd);
-
-      if (attendanceError) {
-        throw new Error(attendanceError.message);
+      if (billingResult.error) {
+        throw billingResult.error;
       }
 
-      // =========================
-      // EXISTING BILLING
-      // =========================
+      setCustomers(customersResult.data || []);
+      setAttendance(attendanceResult.data || []);
+      setExistingBilling(billingResult.data || []);
 
-      const {
-        data: billingData,
-        error: billingError,
-      } = await supabase
-        .from("billing")
-        .select("*")
-        .eq("billing_month", monthStart);
+      const initialPaid: Record<string, string> = {};
 
-      if (billingError) {
-        throw new Error(billingError.message);
-      }
+      (billingResult.data || []).forEach((bill) => {
+        initialPaid[bill.customer_id] = String(
+          Number(bill.paid_amount || 0)
+        );
+      });
 
-      // =========================
-      // CALCULATE BILLING
-      // =========================
-
-      const rows: BillingRow[] =
-        customerList.map((customer) => {
-          const customerAttendance = (
-            attendanceData || []
-          ).filter(
-            (item) =>
-              item.customer_id === customer.id
-          );
-
-          const lunchCount =
-            customerAttendance.filter(
-              (item) => item.lunch === true
-            ).length;
-
-          const dinnerCount =
-            customerAttendance.filter(
-              (item) => item.dinner === true
-            ).length;
-
-          const lunchRate = Number(
-            customer.lunch_rate || 0
-          );
-
-          const dinnerRate = Number(
-            customer.dinner_rate || 0
-          );
-
-          const lunchAmount =
-            lunchCount * lunchRate;
-
-          const dinnerAmount =
-            dinnerCount * dinnerRate;
-
-          const totalAmount =
-            lunchAmount + dinnerAmount;
-
-          const existing = (
-            billingData || []
-          ).find(
-            (item) =>
-              item.customer_id === customer.id
-          );
-
-          const paidAmount = Math.max(
-            Number(existing?.paid_amount || 0),
-            0
-          );
-
-          const dueAmount = Math.max(
-            totalAmount - paidAmount,
-            0
-          );
-
-          let paymentStatus:
-            | "pending"
-            | "partial"
-            | "paid" = "pending";
-
-          if (
-            totalAmount > 0 &&
-            paidAmount >= totalAmount
-          ) {
-            paymentStatus = "paid";
-          } else if (paidAmount > 0) {
-            paymentStatus = "partial";
-          }
-
-          return {
-            id: existing?.id,
-            customer_id: customer.id,
-            billing_month: monthStart,
-
-            lunch_count: lunchCount,
-            dinner_count: dinnerCount,
-
-            lunch_rate: lunchRate,
-            dinner_rate: dinnerRate,
-
-            lunch_amount: lunchAmount,
-            dinner_amount: dinnerAmount,
-
-            total_amount: totalAmount,
-
-            paid_amount: paidAmount,
-            due_amount: dueAmount,
-
-            payment_status: paymentStatus,
-          };
-        });
-
-      setBilling(rows);
-    } catch (err) {
-      console.error("Billing error:", err);
+      setPaidAmounts(initialPaid);
+    } catch (err: any) {
+      console.error("Billing load error:", err);
 
       setError(
-        err instanceof Error
-          ? err.message
-          : "Something went wrong."
+        err?.message ||
+          "Billing data load nahi ho paya."
       );
     } finally {
       setLoading(false);
@@ -233,268 +223,358 @@ export default function BillingPage() {
   }
 
   useEffect(() => {
-    loadBilling();
-  }, [month]);
+    loadBillingData();
+  }, [selectedMonth]);
 
-  // =========================
-  // UPDATE PAID AMOUNT
-  // =========================
+  const billingRows = useMemo<BillingRow[]>(() => {
+    return customers.map((customer) => {
+      const customerAttendance = attendance.filter(
+        (item) => item.customer_id === customer.id
+      );
+
+      const lunchCount = customerAttendance.filter(
+        (item) => item.lunch === true
+      ).length;
+
+      const dinnerCount = customerAttendance.filter(
+        (item) => item.dinner === true
+      ).length;
+
+      const lunchRate = Number(
+        customer.lunch_rate || 0
+      );
+
+      const dinnerRate = Number(
+        customer.dinner_rate || 0
+      );
+
+      const lunchAmount = lunchCount * lunchRate;
+      const dinnerAmount = dinnerCount * dinnerRate;
+
+      const totalAmount =
+        lunchAmount + dinnerAmount;
+
+      const savedBill = existingBilling.find(
+        (bill) =>
+          bill.customer_id === customer.id
+      );
+
+      const paidAmount = Number(
+        paidAmounts[customer.id] ??
+          savedBill?.paid_amount ??
+          0
+      );
+
+      const dueAmount = Math.max(
+        totalAmount - paidAmount,
+        0
+      );
+
+      const paymentStatus = getStatus(
+        totalAmount,
+        paidAmount
+      );
+
+      return {
+        customer,
+        lunchCount,
+        dinnerCount,
+        lunchRate,
+        dinnerRate,
+        lunchAmount,
+        dinnerAmount,
+        totalAmount,
+        paidAmount,
+        dueAmount,
+        paymentStatus,
+        billingId: savedBill?.id || null,
+      };
+    });
+  }, [
+    customers,
+    attendance,
+    existingBilling,
+    paidAmounts,
+  ]);
+
+  const summary = useMemo(() => {
+    return billingRows.reduce(
+      (result, row) => {
+        result.total += row.totalAmount;
+        result.paid += row.paidAmount;
+        result.due += row.dueAmount;
+
+        return result;
+      },
+      {
+        total: 0,
+        paid: 0,
+        due: 0,
+      }
+    );
+  }, [billingRows]);
 
   function updatePaidAmount(
     customerId: string,
     value: string
   ) {
-    const paid = Math.max(
-      Number(value || 0),
-      0
+    if (value === "") {
+      setPaidAmounts((prev) => ({
+        ...prev,
+        [customerId]: "",
+      }));
+
+      return;
+    }
+
+    const numericValue = value.replace(
+      /[^0-9.]/g,
+      ""
     );
 
-    setBilling((current) =>
-      current.map((row) => {
-        if (
-          row.customer_id !== customerId
-        ) {
-          return row;
-        }
-
-        const due = Math.max(
-          row.total_amount - paid,
-          0
-        );
-
-        let status:
-          | "pending"
-          | "partial"
-          | "paid" = "pending";
-
-        if (
-          row.total_amount > 0 &&
-          paid >= row.total_amount
-        ) {
-          status = "paid";
-        } else if (paid > 0) {
-          status = "partial";
-        }
-
-        return {
-          ...row,
-          paid_amount: paid,
-          due_amount: due,
-          payment_status: status,
-        };
-      })
-    );
+    setPaidAmounts((prev) => ({
+      ...prev,
+      [customerId]: numericValue,
+    }));
   }
 
-  // =========================
-  // SAVE PAYMENT
-  // =========================
-
-  async function savePayment(
-    row: BillingRow
-  ) {
+  async function savePayment(row: BillingRow) {
     try {
-      setSaving(row.customer_id);
+      setSavingCustomer(row.customer.id);
       setError("");
+      setSuccess("");
 
       const paidAmount = Math.max(
-        Number(row.paid_amount || 0),
+        Number(paidAmounts[row.customer.id] || 0),
         0
       );
 
       const dueAmount = Math.max(
-        Number(row.total_amount || 0) -
-          paidAmount,
+        row.totalAmount - paidAmount,
         0
       );
 
-      let paymentStatus:
-        | "pending"
-        | "partial"
-        | "paid" = "pending";
+      const paymentStatus = getStatus(
+        row.totalAmount,
+        paidAmount
+      );
 
-      if (
-        row.total_amount > 0 &&
-        paidAmount >= row.total_amount
-      ) {
-        paymentStatus = "paid";
-      } else if (paidAmount > 0) {
-        paymentStatus = "partial";
-      }
+      const billingMonth =
+        getBillingMonthDate(selectedMonth);
 
-      const payload = {
-        customer_id: row.customer_id,
-        billing_month: row.billing_month,
+      const existing = existingBilling.find(
+        (bill) =>
+          bill.customer_id === row.customer.id
+      );
 
-        lunch_count: row.lunch_count,
-        dinner_count: row.dinner_count,
-
-        lunch_rate: row.lunch_rate,
-        dinner_rate: row.dinner_rate,
-
-        lunch_amount: row.lunch_amount,
-        dinner_amount: row.dinner_amount,
-
-        total_amount: row.total_amount,
-        paid_amount: paidAmount,
-        due_amount: dueAmount,
-
-        payment_status: paymentStatus,
-      };
-
-      // =========================
-      // UPDATE
-      // =========================
-
-      if (row.id) {
+      if (existing) {
         const { error: updateError } =
           await supabase
             .from("billing")
-            .update(payload)
-            .eq("id", row.id);
+            .update({
+              paid_amount: paidAmount,
+              due_amount: dueAmount,
+              payment_status: paymentStatus,
+            })
+            .eq("id", existing.id);
 
         if (updateError) {
-          throw new Error(
-            updateError.message
-          );
+          throw updateError;
         }
-      }
-
-      // =========================
-      // INSERT
-      // =========================
-
-      else {
-        const {
-          data,
-          error: insertError,
-        } = await supabase
-          .from("billing")
-          .insert(payload)
-          .select()
-          .single();
+      } else {
+        const { error: insertError } =
+          await supabase
+            .from("billing")
+            .insert({
+              customer_id: row.customer.id,
+              billing_month: billingMonth,
+              lunch_count: row.lunchCount,
+              dinner_count: row.dinnerCount,
+              lunch_rate: row.lunchRate,
+              dinner_rate: row.dinnerRate,
+              lunch_amount: row.lunchAmount,
+              dinner_amount: row.dinnerAmount,
+              total_amount: row.totalAmount,
+              paid_amount: paidAmount,
+              due_amount: dueAmount,
+              payment_status: paymentStatus,
+              generated_at: new Date().toISOString(),
+            });
 
         if (insertError) {
-          throw new Error(
-            insertError.message
-          );
+          throw insertError;
         }
-
-        setBilling((current) =>
-          current.map((item) =>
-            item.customer_id ===
-            row.customer_id
-              ? {
-                  ...item,
-                  id: data.id,
-                }
-              : item
-          )
-        );
       }
 
-      // =========================
-      // UPDATE LOCAL STATE
-      // =========================
-
-      setBilling((current) =>
-        current.map((item) =>
-          item.customer_id ===
-          row.customer_id
-            ? {
-                ...item,
-                paid_amount: paidAmount,
-                due_amount: dueAmount,
-                payment_status:
-                  paymentStatus,
-              }
-            : item
-        )
+      setSuccess(
+        `Payment saved for ${row.customer.name}.`
       );
 
-      alert(
-        "Payment updated successfully."
-      );
-    } catch (err) {
-      console.error(
-        "Payment error:",
-        err
-      );
+      await loadBillingData();
+    } catch (err: any) {
+      console.error("Save payment error:", err);
 
       setError(
-        err instanceof Error
-          ? err.message
-          : "Payment update failed."
+        err?.message ||
+          "Payment save nahi ho paya."
       );
     } finally {
-      setSaving(null);
+      setSavingCustomer(null);
     }
   }
 
-  // =========================
-  // SUMMARY
-  // =========================
+  async function generateBill(row: BillingRow) {
+    try {
+      setGeneratingCustomer(row.customer.id);
+      setError("");
+      setSuccess("");
 
-  const totalBills = billing.reduce(
-    (sum, row) =>
-      sum + Number(row.total_amount || 0),
-    0
-  );
+      const billingMonth =
+        getBillingMonthDate(selectedMonth);
 
-  const totalPaid = billing.reduce(
-    (sum, row) =>
-      sum + Number(row.paid_amount || 0),
-    0
-  );
+      const paidAmount = Math.max(
+        Number(paidAmounts[row.customer.id] || 0),
+        0
+      );
 
-  const totalDue = billing.reduce(
-    (sum, row) =>
-      sum + Number(row.due_amount || 0),
-    0
-  );
+      const dueAmount = Math.max(
+        row.totalAmount - paidAmount,
+        0
+      );
 
-  // =========================
-  // UI
-  // =========================
+      const paymentStatus = getStatus(
+        row.totalAmount,
+        paidAmount
+      );
+
+      const existing = existingBilling.find(
+        (bill) =>
+          bill.customer_id === row.customer.id
+      );
+
+      if (existing) {
+        const { error: updateError } =
+          await supabase
+            .from("billing")
+            .update({
+              billing_month: billingMonth,
+              lunch_count: row.lunchCount,
+              dinner_count: row.dinnerCount,
+              lunch_rate: row.lunchRate,
+              dinner_rate: row.dinnerRate,
+              lunch_amount: row.lunchAmount,
+              dinner_amount: row.dinnerAmount,
+              total_amount: row.totalAmount,
+              paid_amount: paidAmount,
+              due_amount: dueAmount,
+              payment_status: paymentStatus,
+              generated_at: new Date().toISOString(),
+            })
+            .eq("id", existing.id);
+
+        if (updateError) {
+          throw updateError;
+        }
+      } else {
+        const { error: insertError } =
+          await supabase
+            .from("billing")
+            .insert({
+              customer_id: row.customer.id,
+              billing_month: billingMonth,
+              lunch_count: row.lunchCount,
+              dinner_count: row.dinnerCount,
+              lunch_rate: row.lunchRate,
+              dinner_rate: row.dinnerRate,
+              lunch_amount: row.lunchAmount,
+              dinner_amount: row.dinnerAmount,
+              total_amount: row.totalAmount,
+              paid_amount: paidAmount,
+              due_amount: dueAmount,
+              payment_status: paymentStatus,
+              generated_at: new Date().toISOString(),
+            });
+
+        if (insertError) {
+          throw insertError;
+        }
+      }
+
+      setSuccess(
+        `Bill generated for ${row.customer.name}.`
+      );
+
+      await loadBillingData();
+    } catch (err: any) {
+      console.error("Generate bill error:", err);
+
+      setError(
+        err?.message ||
+          "Bill generate nahi ho paya."
+      );
+    } finally {
+      setGeneratingCustomer(null);
+    }
+  }
+
+  if (loading) {
+    return (
+      <main className="min-h-screen bg-white p-4 text-slate-900 sm:p-6">
+        <div className="mx-auto max-w-7xl">
+          <div className="rounded-2xl border border-slate-200 bg-white p-8 shadow-sm">
+            <div className="flex items-center gap-3">
+              <div className="h-5 w-5 animate-spin rounded-full border-2 border-slate-300 border-t-emerald-600" />
+
+              <p className="text-slate-600">
+                Billing loading...
+              </p>
+            </div>
+          </div>
+        </div>
+      </main>
+    );
+  }
 
   return (
-    <main className="min-h-screen bg-gray-100 p-6">
-      <div className="mx-auto max-w-7xl">
-
-        {/* HEADER */}
-
-        <div className="mb-6">
-          <h1 className="text-3xl font-bold text-gray-900">
+    <main className="min-h-screen bg-slate-50 p-4 text-slate-900 sm:p-6">
+      <div className="mx-auto max-w-7xl space-y-6">
+        {/* Header */}
+        <section>
+          <h1 className="text-3xl font-bold tracking-tight text-slate-900">
             Billing
           </h1>
 
-          <p className="mt-2 text-gray-600">
+          <p className="mt-1 text-sm text-slate-500">
             Monthly customer billing and payment management
           </p>
-        </div>
+        </section>
 
-        {/* MONTH */}
+        {/* Month Selector */}
+        <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+          <div className="max-w-xs">
+            <label
+              htmlFor="billing-month"
+              className="mb-2 block text-sm font-semibold text-slate-700"
+            >
+              Billing Month
+            </label>
 
-        <div className="mb-6 rounded-xl bg-white p-5 shadow">
-          <label className="mb-2 block font-semibold">
-            Billing Month
-          </label>
+            <input
+              id="billing-month"
+              type="month"
+              value={selectedMonth}
+              onChange={(event) =>
+                setSelectedMonth(event.target.value)
+              }
+              className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-slate-900 outline-none transition focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100"
+            />
+          </div>
+        </section>
 
-          <input
-            type="month"
-            value={month}
-            onChange={(e) =>
-              setMonth(e.target.value)
-            }
-            className="rounded-lg border border-gray-300 p-3"
-          />
-        </div>
-
-        {/* ERROR */}
-
+        {/* Messages */}
         {error && (
-          <div className="mb-6 rounded-xl border border-red-300 bg-red-50 p-4 text-red-700">
-            <p className="font-bold">
+          <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
+            <p className="font-semibold">
               Billing Error
             </p>
 
@@ -504,309 +584,304 @@ export default function BillingPage() {
           </div>
         )}
 
-        {/* SUMMARY */}
+        {success && (
+          <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-700">
+            {success}
+          </div>
+        )}
 
-        {!loading &&
-          billing.length > 0 && (
-            <div className="mb-6 grid gap-4 md:grid-cols-3">
+        {/* Summary */}
+        <section className="grid grid-cols-1 gap-4 md:grid-cols-3">
+          <SummaryCard
+            title="Total Bills"
+            value={summary.total}
+            type="normal"
+          />
 
-              <div className="rounded-xl bg-white p-5 shadow">
-                <p className="text-sm text-gray-500">
-                  Total Bills
-                </p>
+          <SummaryCard
+            title="Total Paid"
+            value={summary.paid}
+            type="paid"
+          />
 
-                <p className="mt-2 text-2xl font-bold">
-                  ₹{totalBills.toFixed(2)}
-                </p>
-              </div>
+          <SummaryCard
+            title="Total Due"
+            value={summary.due}
+            type="due"
+          />
+        </section>
 
-              <div className="rounded-xl bg-white p-5 shadow">
-                <p className="text-sm text-gray-500">
-                  Total Paid
-                </p>
+        {/* Billing Table */}
+        <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+          <div className="border-b border-slate-200 px-5 py-4">
+            <h2 className="text-lg font-semibold text-slate-900">
+              {formatMonth(selectedMonth)} Billing
+            </h2>
 
-                <p className="mt-2 text-2xl font-bold text-green-600">
-                  ₹{totalPaid.toFixed(2)}
-                </p>
-              </div>
+            <p className="mt-1 text-sm text-slate-500">
+              Lunch and dinner charges are calculated from actual
+              attendance.
+            </p>
+          </div>
 
-              <div className="rounded-xl bg-white p-5 shadow">
-                <p className="text-sm text-gray-500">
-                  Total Due
-                </p>
-
-                <p className="mt-2 text-2xl font-bold text-red-600">
-                  ₹{totalDue.toFixed(2)}
-                </p>
-              </div>
-
-            </div>
-          )}
-
-        {/* TABLE */}
-
-        <div className="overflow-hidden rounded-xl bg-white shadow">
-
-          {loading ? (
+          {billingRows.length === 0 ? (
             <div className="p-10 text-center">
-              <p className="text-lg font-semibold">
-                Loading billing...
-              </p>
-            </div>
-          ) : billing.length === 0 ? (
-            <div className="p-10 text-center">
-              <p className="text-lg font-semibold">
+              <p className="font-medium text-slate-700">
                 No active customers found.
+              </p>
+
+              <p className="mt-1 text-sm text-slate-500">
+                Add an active customer to generate billing.
               </p>
             </div>
           ) : (
             <div className="overflow-x-auto">
-
-              <table className="min-w-full">
-
-                <thead className="bg-gray-900 text-white">
+              <table className="w-full min-w-[1200px] text-left text-sm">
+                <thead className="bg-slate-900 text-white">
                   <tr>
-
-                    <th className="px-4 py-4 text-left">
+                    <th className="px-4 py-4 font-semibold">
                       Customer
                     </th>
 
-                    <th className="px-4 py-4 text-center">
+                    <th className="px-4 py-4 text-center font-semibold">
                       Lunch
                     </th>
 
-                    <th className="px-4 py-4 text-center">
+                    <th className="px-4 py-4 text-center font-semibold">
                       Dinner
                     </th>
 
-                    <th className="px-4 py-4 text-right">
-                      Lunch ₹
+                    <th className="px-4 py-4 text-right font-semibold">
+                      Lunch Rate
                     </th>
 
-                    <th className="px-4 py-4 text-right">
-                      Dinner ₹
+                    <th className="px-4 py-4 text-right font-semibold">
+                      Dinner Rate
                     </th>
 
-                    <th className="px-4 py-4 text-right">
+                    <th className="px-4 py-4 text-right font-semibold">
+                      Lunch Amount
+                    </th>
+
+                    <th className="px-4 py-4 text-right font-semibold">
+                      Dinner Amount
+                    </th>
+
+                    <th className="px-4 py-4 text-right font-semibold">
                       Total
                     </th>
 
-                    <th className="px-4 py-4 text-right">
+                    <th className="px-4 py-4 text-right font-semibold">
                       Paid
                     </th>
 
-                    <th className="px-4 py-4 text-right">
+                    <th className="px-4 py-4 text-right font-semibold">
                       Due
                     </th>
 
-                    <th className="px-4 py-4 text-center">
+                    <th className="px-4 py-4 text-center font-semibold">
                       Status
                     </th>
 
-                    <th className="px-4 py-4 text-center">
+                    <th className="px-4 py-4 text-center font-semibold">
                       Action
                     </th>
-
                   </tr>
                 </thead>
 
-                <tbody>
+                <tbody className="divide-y divide-slate-200">
+                  {billingRows.map((row) => (
+                    <tr
+                      key={row.customer.id}
+                      className="transition hover:bg-slate-50"
+                    >
+                      {/* Customer */}
+                      <td className="px-4 py-5">
+                        <div className="font-semibold text-slate-900">
+                          {row.customer.name}
+                        </div>
 
-                  {billing.map((row) => {
+                        <div className="mt-1 text-xs text-slate-500">
+                          {row.customer.phone || "-"}
+                        </div>
+                      </td>
 
-                    const customer =
-                      customers.find(
-                        (item) =>
-                          item.id ===
-                          row.customer_id
-                      );
+                      {/* Lunch Count */}
+                      <td className="px-4 py-5 text-center font-medium text-slate-800">
+                        {row.lunchCount}
+                      </td>
 
-                    return (
-                      <tr
-                        key={row.customer_id}
-                        className="border-b hover:bg-gray-50"
-                      >
+                      {/* Dinner Count */}
+                      <td className="px-4 py-5 text-center font-medium text-slate-800">
+                        {row.dinnerCount}
+                      </td>
 
-                        {/* CUSTOMER */}
+                      {/* Lunch Rate */}
+                      <td className="px-4 py-5 text-right text-slate-700">
+                        {formatCurrency(row.lunchRate)}
+                      </td>
 
-                        <td className="px-4 py-4">
-                          <p className="font-semibold">
-                            {customer?.name ||
-                              "Unknown"}
-                          </p>
+                      {/* Dinner Rate */}
+                      <td className="px-4 py-5 text-right text-slate-700">
+                        {formatCurrency(row.dinnerRate)}
+                      </td>
 
-                          <p className="text-sm text-gray-500">
-                            {customer?.phone ||
-                              ""}
-                          </p>
-                        </td>
+                      {/* Lunch Amount */}
+                      <td className="px-4 py-5 text-right font-medium text-slate-900">
+                        {formatCurrency(row.lunchAmount)}
+                      </td>
 
-                        {/* LUNCH COUNT */}
+                      {/* Dinner Amount */}
+                      <td className="px-4 py-5 text-right font-medium text-slate-900">
+                        {formatCurrency(row.dinnerAmount)}
+                      </td>
 
-                        <td className="px-4 py-4 text-center">
-                          {row.lunch_count}
-                        </td>
+                      {/* Total */}
+                      <td className="px-4 py-5 text-right font-bold text-slate-900">
+                        {formatCurrency(row.totalAmount)}
+                      </td>
 
-                        {/* DINNER COUNT */}
+                      {/* Paid */}
+                      <td className="px-4 py-5">
+                        <input
+                          type="text"
+                          inputMode="decimal"
+                          value={
+                            paidAmounts[row.customer.id] ??
+                            ""
+                          }
+                          onChange={(event) =>
+                            updatePaidAmount(
+                              row.customer.id,
+                              event.target.value
+                            )
+                          }
+                          className="w-28 rounded-lg border border-slate-300 bg-white px-3 py-2 text-right text-slate-900 outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100"
+                          placeholder="0"
+                        />
+                      </td>
 
-                        <td className="px-4 py-4 text-center">
-                          {row.dinner_count}
-                        </td>
+                      {/* Due */}
+                      <td className="px-4 py-5 text-right font-bold text-red-600">
+                        {formatCurrency(row.dueAmount)}
+                      </td>
 
-                        {/* LUNCH AMOUNT */}
+                      {/* Status */}
+                      <td className="px-4 py-5 text-center">
+                        <StatusBadge
+                          status={row.paymentStatus}
+                        />
+                      </td>
 
-                        <td className="px-4 py-4 text-right">
-                          ₹
-                          {row.lunch_amount.toFixed(
-                            2
-                          )}
-                        </td>
-
-                        {/* DINNER AMOUNT */}
-
-                        <td className="px-4 py-4 text-right">
-                          ₹
-                          {row.dinner_amount.toFixed(
-                            2
-                          )}
-                        </td>
-
-                        {/* TOTAL */}
-
-                        <td className="px-4 py-4 text-right font-bold">
-                          ₹
-                          {row.total_amount.toFixed(
-                            2
-                          )}
-                        </td>
-
-                        {/* PAID */}
-
-                        <td className="px-4 py-4">
-                          <input
-                            type="number"
-                            min="0"
-                            value={
-                              row.paid_amount
+                      {/* Action */}
+                      <td className="px-4 py-5">
+                        <div className="flex min-w-[130px] flex-col gap-2">
+                          <button
+                            type="button"
+                            onClick={() =>
+                              savePayment(row)
                             }
-                            onChange={(e) =>
-                              updatePaidAmount(
-                                row.customer_id,
-                                e.target.value
-                              )
+                            disabled={
+                              savingCustomer ===
+                                row.customer.id ||
+                              generatingCustomer ===
+                                row.customer.id
                             }
-                            className="w-28 rounded-lg border border-gray-300 p-2 text-right"
-                          />
-                        </td>
-
-                        {/* DUE */}
-
-                        <td className="px-4 py-4 text-right font-bold text-red-600">
-                          ₹
-                          {row.due_amount.toFixed(
-                            2
-                          )}
-                        </td>
-
-                        {/* STATUS */}
-
-                        <td className="px-4 py-4 text-center">
-
-                          <span
-                            className={`inline-block rounded-full px-3 py-1 text-xs font-semibold ${
-                              row.payment_status ===
-                              "paid"
-                                ? "bg-green-100 text-green-700"
-                                : row.payment_status ===
-                                  "partial"
-                                ? "bg-yellow-100 text-yellow-700"
-                                : "bg-red-100 text-red-700"
-                            }`}
+                            className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
                           >
-                            {row.payment_status ===
-                            "paid"
-                              ? "Paid"
-                              : row.payment_status ===
-                                "partial"
-                              ? "Partial"
-                              : "Pending"}
-                          </span>
+                            {savingCustomer ===
+                            row.customer.id
+                              ? "Saving..."
+                              : "Save"}
+                          </button>
 
-                        </td>
-
-                        {/* ACTION */}
-
-                        <td className="px-4 py-4">
-
-                          <div className="flex flex-col gap-2">
-
-                            <button
-                              onClick={() =>
-                                savePayment(row)
-                              }
-                              disabled={
-                                saving ===
-                                row.customer_id
-                              }
-                              className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
-                            >
-                              {saving ===
-                              row.customer_id
-                                ? "Saving..."
-                                : "Save"}
-                            </button>
-
-                            <Link
-                              href={`/billing/${row.customer_id}`}
-                              className="rounded-lg bg-green-600 px-4 py-2 text-center text-sm font-semibold text-white hover:bg-green-700"
-                            >
-                              Generate Bill
-                            </Link>
-
-                          </div>
-
-                        </td>
-
-                      </tr>
-                    );
-                  })}
-
+                          <button
+                            type="button"
+                            onClick={() =>
+                              generateBill(row)
+                            }
+                            disabled={
+                              savingCustomer ===
+                                row.customer.id ||
+                              generatingCustomer ===
+                                row.customer.id
+                            }
+                            className="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-50"
+                          >
+                            {generatingCustomer ===
+                            row.customer.id
+                              ? "Generating..."
+                              : "Generate Bill"}
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
                 </tbody>
-
               </table>
-
             </div>
           )}
-
-        </div>
-
-        {/* FORMULA */}
-
-        <div className="mt-6 rounded-xl bg-blue-50 p-5">
-
-          <h2 className="font-bold text-blue-900">
-            Billing Formula
-          </h2>
-
-          <p className="mt-2 text-blue-800">
-            Lunch Amount = Lunch Present × Lunch Rate
-          </p>
-
-          <p className="text-blue-800">
-            Dinner Amount = Dinner Present × Dinner Rate
-          </p>
-
-          <p className="font-semibold text-blue-900">
-            Total Bill = Lunch Amount + Dinner Amount
-          </p>
-
-          <p className="text-blue-800">
-            Due = Total Bill − Paid Amount
-          </p>
-
-        </div>
-
+        </section>
       </div>
     </main>
+  );
+}
+
+function SummaryCard({
+  title,
+  value,
+  type,
+}: {
+  title: string;
+  value: number;
+  type: "normal" | "paid" | "due";
+}) {
+  const valueClass =
+    type === "paid"
+      ? "text-emerald-600"
+      : type === "due"
+      ? "text-red-600"
+      : "text-slate-900";
+
+  return (
+    <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+      <p className="text-sm text-slate-500">
+        {title}
+      </p>
+
+      <p
+        className={`mt-2 text-2xl font-bold ${valueClass}`}
+      >
+        {formatCurrency(value)}
+      </p>
+    </div>
+  );
+}
+
+function StatusBadge({
+  status,
+}: {
+  status: string;
+}) {
+  if (status === "paid") {
+    return (
+      <span className="inline-flex rounded-full bg-emerald-100 px-3 py-1 text-xs font-semibold text-emerald-700">
+        Paid
+      </span>
+    );
+  }
+
+  if (status === "partial") {
+    return (
+      <span className="inline-flex rounded-full bg-amber-100 px-3 py-1 text-xs font-semibold text-amber-700">
+        Partial
+      </span>
+    );
+  }
+
+  return (
+    <span className="inline-flex rounded-full bg-red-100 px-3 py-1 text-xs font-semibold text-red-700">
+      Pending
+    </span>
   );
 }

@@ -1,11 +1,14 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 
 type Plan = "lunch" | "dinner" | "both";
 
 export default function CustomerRequestPage() {
+  const searchParams = useSearchParams();
+
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
   const [email, setEmail] = useState("");
@@ -16,6 +19,18 @@ export default function CustomerRequestPage() {
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
   const [error, setError] = useState("");
+
+  useEffect(() => {
+    const selectedPlan = searchParams.get("plan");
+
+    if (
+      selectedPlan === "lunch" ||
+      selectedPlan === "dinner" ||
+      selectedPlan === "both"
+    ) {
+      setPlan(selectedPlan);
+    }
+  }, [searchParams]);
 
   const lunch = plan === "lunch" || plan === "both";
   const dinner = plan === "dinner" || plan === "both";
@@ -136,7 +151,8 @@ export default function CustomerRequestPage() {
   return (
     <main className="min-h-screen bg-gray-100 px-4 py-8 md:py-12">
       <div className="mx-auto max-w-2xl">
-        {/* HEADER */}
+
+        {/* HEADING */}
         <div className="mb-8 text-center">
           <h1 className="text-3xl font-bold text-gray-900 md:text-4xl">
             Join Lazzat Tiffin
@@ -148,6 +164,7 @@ export default function CustomerRequestPage() {
         </div>
 
         <div className="rounded-2xl bg-white p-6 shadow-xl md:p-8">
+
           {/* ERROR */}
           {error && (
             <div className="mb-6 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
@@ -159,6 +176,7 @@ export default function CustomerRequestPage() {
             onSubmit={handleSubmit}
             className="space-y-6"
           >
+
             {/* NAME */}
             <div>
               <label className="mb-2 block text-sm font-semibold text-gray-700">
@@ -249,6 +267,8 @@ export default function CustomerRequestPage() {
               </label>
 
               <div className="grid gap-3 md:grid-cols-3">
+
+                {/* LUNCH */}
                 <PlanCard
                   title="Lunch Only"
                   description="Lunch meal"
@@ -259,6 +279,7 @@ export default function CustomerRequestPage() {
                   }}
                 />
 
+                {/* DINNER */}
                 <PlanCard
                   title="Dinner Only"
                   description="Dinner meal"
@@ -269,6 +290,7 @@ export default function CustomerRequestPage() {
                   }}
                 />
 
+                {/* BOTH */}
                 <PlanCard
                   title="Lunch + Dinner"
                   description="Both meals"
@@ -278,6 +300,7 @@ export default function CustomerRequestPage() {
                     setError("");
                   }}
                 />
+
               </div>
             </div>
 
@@ -294,15 +317,12 @@ export default function CustomerRequestPage() {
                   setStartDate(e.target.value);
                   setError("");
                 }}
-                min={new Date()
-                  .toISOString()
-                  .split("T")[0]}
                 required
                 className="w-full rounded-xl border border-gray-300 px-4 py-3 outline-none transition focus:border-green-500 focus:ring-2 focus:ring-green-100"
               />
             </div>
 
-            {/* SUMMARY */}
+            {/* SELECTED PLAN SUMMARY */}
             <div className="rounded-xl bg-gray-50 p-5">
               <p className="text-sm font-semibold text-gray-700">
                 Selected Plan
@@ -339,6 +359,7 @@ export default function CustomerRequestPage() {
                 ? "Submitting Request..."
                 : "Send Plan Request"}
             </button>
+
           </form>
         </div>
 

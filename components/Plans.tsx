@@ -1,6 +1,7 @@
 "use client";
 
 import { motion } from "framer-motion";
+import Link from "next/link";
 
 export default function Plans() {
   const plans = [
@@ -8,6 +9,7 @@ export default function Plans() {
       title: "Lunch Plan",
       price: "₹1650",
       subtitle: "Lunch Only",
+      requestPlan: "lunch",
       features: [
         "Daily Fresh Lunch",
         "Homemade Food",
@@ -20,6 +22,7 @@ export default function Plans() {
       title: "Dinner Plan",
       price: "₹1650",
       subtitle: "Dinner Only",
+      requestPlan: "dinner",
       features: [
         "Daily Fresh Dinner",
         "Homemade Food",
@@ -30,8 +33,9 @@ export default function Plans() {
     },
     {
       title: "Full Plan",
-      price: "₹3000",
+      price: "₹3300",
       subtitle: "Lunch + Dinner",
+      requestPlan: "both",
       features: [
         "Daily Lunch & Dinner",
         "Fresh Homemade Food",
@@ -150,12 +154,8 @@ export default function Plans() {
               </ul>
 
               {/* CHOOSE PLAN */}
-              <a
-                href={`https://wa.me/919955672533?text=${encodeURIComponent(
-                  `Hello Lazzat Tiffin, I want to choose the ${plan.title} (${plan.subtitle}) for ${plan.price}/month.`
-                )}`}
-                target="_blank"
-                rel="noopener noreferrer"
+              <Link
+                href={`/request?plan=${plan.requestPlan}`}
                 className={`mt-8 inline-block rounded-xl px-8 py-3 font-semibold transition ${
                   index === 2
                     ? "bg-white text-orange-500 hover:bg-orange-50"
@@ -163,7 +163,7 @@ export default function Plans() {
                 }`}
               >
                 Choose Plan
-              </a>
+              </Link>
 
             </motion.div>
           ))}

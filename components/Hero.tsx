@@ -49,7 +49,7 @@ export default function Hero() {
                 href="/request"
                 className="rounded-xl border-2 border-green-600 bg-white px-7 py-3.5 text-center font-bold text-green-700 transition hover:bg-green-50"
               >
-                Order Now
+                Start Now
               </Link>
             </div>
 

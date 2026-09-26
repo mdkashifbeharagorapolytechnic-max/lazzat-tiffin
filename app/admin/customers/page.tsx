@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/lib/supabase";
 
 type Customer = {
@@ -16,6 +16,14 @@ type Customer = {
   auth_user_id: string | null;
 };
 
+type CustomerWallet = {
+  id: string;
+  customer_id: string;
+  balance: number;
+  created_at: string;
+  updated_at: string;
+};
+
 type LoginResult = {
   success?: boolean;
   alreadyLinked?: boolean;
@@ -28,6 +36,8 @@ type LoginResult = {
   error?: string;
 };
 
+type WalletAction = "credit" | "debit";
+
 const emptyForm = {
   name: "",
   phone: "",
@@ -39,9 +49,10 @@ const emptyForm = {
 };
 
 export default function CustomersPage() {
-  const [customers, setCustomers] = useState<Customer[]>(
-    []
-  );
+  const [customers, setCustomers] = useState<Customer[]>([]);
+  const [wallets, setWallets] = useState<
+    Record<string, number>
+  >({});
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -58,35 +69,140 @@ export default function CustomersPage() {
   const [creatingLoginId, setCreatingLoginId] =
     useState<string | null>(null);
 
+  // ==================================================
+  // WALLET STATE
+  // ==================================================
+
+  const [walletModalOpen, setWalletModalOpen] =
+    useState(false);
+
+  const [walletCustomer, setWalletCustomer] =
+    useState<Customer | null>(null);
+
+  const [walletAction, setWalletAction] =
+    useState<WalletAction>("credit");
+
+  const [walletAmount, setWalletAmount] =
+    useState("");
+
+  const [walletDescription, setWalletDescription] =
+    useState("");
+
+  const [walletSaving, setWalletSaving] =
+    useState(false);
+
+  const [walletError, setWalletError] =
+    useState("");
+
+  // ==================================================
+  // INITIAL LOAD
+  // ==================================================
+
   useEffect(() => {
     fetchCustomers();
   }, []);
 
   // ==================================================
-  // FETCH CUSTOMERS
+  // FETCH CUSTOMERS + WALLETS
   // ==================================================
 
   async function fetchCustomers() {
     setLoading(true);
     setError("");
 
-    const { data, error } = await supabase
-      .from("customers")
-      .select("*")
-      .order("created_at", {
-        ascending: false,
-      });
+    try {
+      const { data, error } = await supabase
+        .from("customers")
+        .select("*")
+        .order("created_at", {
+          ascending: false,
+        });
 
-    if (error) {
-      console.error(error);
+      if (error) {
+        throw error;
+      }
 
-      setError(error.message);
+      const customerList =
+        (data || []) as Customer[];
+
+      setCustomers(customerList);
+
+      await fetchWallets(customerList);
+    } catch (err: unknown) {
+      console.error(err);
+
+      setError(
+        err instanceof Error
+          ? err.message
+          : "Unable to load customers."
+      );
+
       setCustomers([]);
-    } else {
-      setCustomers((data || []) as Customer[]);
+      setWallets({});
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  // ==================================================
+  // FETCH WALLETS
+  // ==================================================
+
+  async function fetchWallets(
+    customerList: Customer[]
+  ) {
+    if (customerList.length === 0) {
+      setWallets({});
+      return;
     }
 
-    setLoading(false);
+    const customerIds =
+      customerList.map(
+        (customer) => customer.id
+      );
+
+    const { data, error } = await supabase
+      .from("customer_wallets")
+      .select(
+        "id, customer_id, balance, created_at, updated_at"
+      )
+      .in("customer_id", customerIds);
+
+    if (error) {
+      console.error(
+        "Wallet fetch error:",
+        error
+      );
+
+      setWallets({});
+      return;
+    }
+
+    const walletMap: Record<
+      string,
+      number
+    > = {};
+
+    (data || []).forEach(
+      (wallet: CustomerWallet) => {
+        walletMap[wallet.customer_id] =
+          Number(wallet.balance || 0);
+      }
+    );
+
+    setWallets(walletMap);
+  }
+
+  // ==================================================
+  // GET WALLET BALANCE
+  // ==================================================
+
+  function getWalletBalance(
+    customerId: string
+  ) {
+    return Number(
+      wallets[customerId] || 0
+    );
   }
 
   // ==================================================
@@ -95,7 +211,9 @@ export default function CustomersPage() {
 
   function openAddForm() {
     setEditingId(null);
-    setForm(emptyForm);
+    setForm({
+      ...emptyForm,
+    });
     setError("");
     setShowForm(true);
   }
@@ -104,7 +222,9 @@ export default function CustomersPage() {
   // EDIT FORM
   // ==================================================
 
-  function openEditForm(customer: Customer) {
+  function openEditForm(
+    customer: Customer
+  ) {
     setEditingId(customer.id);
 
     setForm({
@@ -119,7 +239,8 @@ export default function CustomersPage() {
         customer.dinner_rate !== null
           ? String(customer.dinner_rate)
           : "",
-      start_date: customer.start_date || "",
+      start_date:
+        customer.start_date || "",
       active: customer.active,
     });
 
@@ -128,7 +249,7 @@ export default function CustomersPage() {
   }
 
   // ==================================================
-  // CLOSE FORM
+  // CLOSE CUSTOMER FORM
   // ==================================================
 
   function closeForm() {
@@ -136,7 +257,9 @@ export default function CustomersPage() {
 
     setShowForm(false);
     setEditingId(null);
-    setForm(emptyForm);
+    setForm({
+      ...emptyForm,
+    });
     setError("");
   }
 
@@ -190,14 +313,18 @@ export default function CustomersPage() {
             .update(customerData)
             .eq("id", editingId);
 
-        if (error) throw error;
+        if (error) {
+          throw error;
+        }
       } else {
         const { error } =
           await supabase
             .from("customers")
             .insert([customerData]);
 
-        if (error) throw error;
+        if (error) {
+          throw error;
+        }
       }
 
       closeForm();
@@ -223,9 +350,10 @@ export default function CustomersPage() {
   async function deleteCustomer(
     id: string
   ) {
-    const customer = customers.find(
-      (item) => item.id === id
-    );
+    const customer =
+      customers.find(
+        (item) => item.id === id
+      );
 
     if (!customer) return;
 
@@ -293,18 +421,6 @@ export default function CustomersPage() {
 
     let existingEmail = "";
 
-    /*
-     * If customer doesn't have auth_user_id,
-     * ask whether an existing Supabase Auth
-     * account should be linked.
-     *
-     * For ATIF enter:
-     * mdkashifrazaansari333@gmail.com
-     *
-     * For a completely new customer,
-     * press Cancel and then choose Create New.
-     */
-
     if (!customer.auth_user_id) {
       const emailInput =
         window.prompt(
@@ -366,10 +482,6 @@ export default function CustomersPage() {
         );
       }
 
-      // ------------------------------------------
-      // EXISTING ACCOUNT LINKED
-      // ------------------------------------------
-
       if (result.linkedUser) {
         alert(
           `Login account successfully linked.\n\n` +
@@ -382,10 +494,6 @@ export default function CustomersPage() {
         return;
       }
 
-      // ------------------------------------------
-      // ALREADY LINKED
-      // ------------------------------------------
-
       if (result.alreadyLinked) {
         alert(
           `${customer.name} already has a login account.`
@@ -396,11 +504,10 @@ export default function CustomersPage() {
         return;
       }
 
-      // ------------------------------------------
-      // NEW ACCOUNT
-      // ------------------------------------------
-
-      if (result.email && result.password) {
+      if (
+        result.email &&
+        result.password
+      ) {
         alert(
           `LOGIN ACCOUNT CREATED\n\n` +
             `Customer: ${customer.name}\n\n` +
@@ -433,26 +540,216 @@ export default function CustomersPage() {
   }
 
   // ==================================================
+  // OPEN WALLET MODAL
+  // ==================================================
+
+  function openWalletModal(
+    customer: Customer,
+    action: WalletAction
+  ) {
+    setWalletCustomer(customer);
+    setWalletAction(action);
+    setWalletAmount("");
+    setWalletDescription("");
+    setWalletError("");
+    setWalletModalOpen(true);
+  }
+
+  // ==================================================
+  // CLOSE WALLET MODAL
+  // ==================================================
+
+  function closeWalletModal() {
+    if (walletSaving) return;
+
+    setWalletModalOpen(false);
+    setWalletCustomer(null);
+    setWalletAmount("");
+    setWalletDescription("");
+    setWalletError("");
+  }
+
+  // ==================================================
+  // WALLET TRANSACTION
+  // ==================================================
+
+  async function submitWalletTransaction(
+    e: React.FormEvent
+  ) {
+    e.preventDefault();
+
+    if (!walletCustomer) {
+      return;
+    }
+
+    const amount =
+      Number(walletAmount);
+
+    if (
+      !walletAmount.trim() ||
+      Number.isNaN(amount) ||
+      amount <= 0
+    ) {
+      setWalletError(
+        "Please enter a valid amount greater than ₹0."
+      );
+      return;
+    }
+
+    if (
+      walletAction === "debit" &&
+      amount >
+        getWalletBalance(
+          walletCustomer.id
+        )
+    ) {
+      setWalletError(
+        "Debit amount cannot be greater than the customer's wallet balance."
+      );
+      return;
+    }
+
+    setWalletSaving(true);
+    setWalletError("");
+
+    try {
+      if (
+        walletAction === "credit"
+      ) {
+        const { data, error } =
+          await supabase.rpc(
+            "add_customer_wallet_credit",
+            {
+              p_customer_id:
+                walletCustomer.id,
+
+              p_amount: amount,
+
+              p_description:
+                walletDescription.trim() ||
+                "Wallet credit added by admin",
+
+              p_payment_id: null,
+
+              p_reference_type:
+                "admin",
+
+              p_reference_id: null,
+            }
+          );
+
+        if (error) {
+          throw error;
+        }
+
+        console.log(
+          "Wallet credit result:",
+          data
+        );
+      } else {
+        const { data, error } =
+          await supabase.rpc(
+            "add_customer_wallet_debit",
+            {
+              p_customer_id:
+                walletCustomer.id,
+
+              p_amount: amount,
+
+              p_description:
+                walletDescription.trim() ||
+                "Wallet debit added by admin",
+
+              p_reference_type:
+                "admin",
+
+              p_reference_id: null,
+            }
+          );
+
+        if (error) {
+          throw error;
+        }
+
+        console.log(
+          "Wallet debit result:",
+          data
+        );
+      }
+
+      alert(
+        walletAction === "credit"
+          ? `₹${amount.toFixed(
+              2
+            )} added to ${walletCustomer.name}'s wallet successfully.`
+          : `₹${amount.toFixed(
+              2
+            )} deducted from ${walletCustomer.name}'s wallet successfully.`
+      );
+
+      closeWalletModal();
+
+      await fetchCustomers();
+    } catch (err: unknown) {
+      console.error(
+        "Wallet transaction error:",
+        err
+      );
+
+      setWalletError(
+        err instanceof Error
+          ? err.message
+          : "Unable to update wallet."
+      );
+    } finally {
+      setWalletSaving(false);
+    }
+  }
+
+  // ==================================================
   // SEARCH
   // ==================================================
 
   const filteredCustomers =
-    customers.filter((customer) => {
+    useMemo(() => {
       const text =
-        search.toLowerCase().trim();
+        search
+          .toLowerCase()
+          .trim();
 
-      return (
-        customer.name
-          ?.toLowerCase()
-          .includes(text) ||
-        customer.phone
-          ?.toLowerCase()
-          .includes(text) ||
-        customer.address
-          ?.toLowerCase()
-          .includes(text)
+      if (!text) {
+        return customers;
+      }
+
+      return customers.filter(
+        (customer) =>
+          customer.name
+            ?.toLowerCase()
+            .includes(text) ||
+          customer.phone
+            ?.toLowerCase()
+            .includes(text) ||
+          customer.address
+            ?.toLowerCase()
+            .includes(text)
       );
-    });
+    }, [customers, search]);
+
+  // ==================================================
+  // TOTAL WALLET BALANCE
+  // ==================================================
+
+  const totalWalletBalance =
+    useMemo(() => {
+      return customers.reduce(
+        (total, customer) =>
+          total +
+          getWalletBalance(
+            customer.id
+          ),
+        0
+      );
+    }, [customers, wallets]);
 
   // ==================================================
   // UI
@@ -460,9 +757,12 @@ export default function CustomersPage() {
 
   return (
     <div className="min-h-screen bg-gray-50 p-4 md:p-8">
-      <div className="mx-auto max-w-7xl">
+      <div className="mx-auto max-w-[1600px]">
 
+        {/* ================================================= */}
         {/* HEADER */}
+        {/* ================================================= */}
+
         <div className="mb-6 flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
           <div>
             <h1 className="text-3xl font-bold text-gray-900">
@@ -482,27 +782,84 @@ export default function CustomersPage() {
           </button>
         </div>
 
+        {/* ================================================= */}
+        {/* WALLET SUMMARY */}
+        {/* ================================================= */}
+
+        <div className="mb-6 grid gap-4 md:grid-cols-3">
+
+          <div className="rounded-xl border border-emerald-100 bg-white p-5 shadow-sm">
+            <div className="text-sm font-medium text-gray-500">
+              Total Customers
+            </div>
+
+            <div className="mt-2 text-3xl font-bold text-gray-900">
+              {customers.length}
+            </div>
+          </div>
+
+          <div className="rounded-xl border border-green-100 bg-white p-5 shadow-sm">
+            <div className="text-sm font-medium text-gray-500">
+              Total Wallet Balance
+            </div>
+
+            <div className="mt-2 text-3xl font-bold text-green-600">
+              ₹
+              {totalWalletBalance.toFixed(
+                2
+              )}
+            </div>
+          </div>
+
+          <div className="rounded-xl border border-blue-100 bg-white p-5 shadow-sm">
+            <div className="text-sm font-medium text-gray-500">
+              Active Customers
+            </div>
+
+            <div className="mt-2 text-3xl font-bold text-blue-600">
+              {
+                customers.filter(
+                  (customer) =>
+                    customer.active
+                ).length
+              }
+            </div>
+          </div>
+
+        </div>
+
+        {/* ================================================= */}
         {/* ERROR */}
+        {/* ================================================= */}
+
         {error && !showForm && (
           <div className="mb-5 rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-700">
             {error}
           </div>
         )}
 
+        {/* ================================================= */}
         {/* SEARCH */}
+        {/* ================================================= */}
+
         <div className="mb-6 rounded-xl bg-white p-4 shadow-sm">
           <input
             type="text"
             placeholder="Search by name, phone or address..."
             value={search}
             onChange={(e) =>
-              setSearch(e.target.value)
+              setSearch(
+                e.target.value
+              )
             }
             className="w-full rounded-lg border border-gray-300 px-4 py-3 outline-none focus:border-green-500 focus:ring-2 focus:ring-green-100"
           />
         </div>
 
-        {/* FORM */}
+        {/* ================================================= */}
+        {/* CUSTOMER FORM */}
+        {/* ================================================= */}
+
         {showForm && (
           <div className="mb-8 rounded-xl bg-white p-5 shadow-md md:p-7">
 
@@ -528,11 +885,15 @@ export default function CustomersPage() {
               </div>
             )}
 
-            <form onSubmit={saveCustomer}>
-
+            <form
+              onSubmit={
+                saveCustomer
+              }
+            >
               <div className="grid gap-5 md:grid-cols-2">
 
                 {/* NAME */}
+
                 <div>
                   <label className="mb-1 block text-sm font-medium text-gray-700">
                     Customer Name *
@@ -540,7 +901,9 @@ export default function CustomersPage() {
 
                   <input
                     type="text"
-                    value={form.name}
+                    value={
+                      form.name
+                    }
                     onChange={(e) =>
                       setForm({
                         ...form,
@@ -554,6 +917,7 @@ export default function CustomersPage() {
                 </div>
 
                 {/* PHONE */}
+
                 <div>
                   <label className="mb-1 block text-sm font-medium text-gray-700">
                     Phone
@@ -561,7 +925,9 @@ export default function CustomersPage() {
 
                   <input
                     type="tel"
-                    value={form.phone}
+                    value={
+                      form.phone
+                    }
                     onChange={(e) =>
                       setForm({
                         ...form,
@@ -574,17 +940,21 @@ export default function CustomersPage() {
                 </div>
 
                 {/* ADDRESS */}
+
                 <div className="md:col-span-2">
                   <label className="mb-1 block text-sm font-medium text-gray-700">
                     Address
                   </label>
 
                   <textarea
-                    value={form.address}
+                    value={
+                      form.address
+                    }
                     onChange={(e) =>
                       setForm({
                         ...form,
-                        address: e.target.value,
+                        address:
+                          e.target.value,
                       })
                     }
                     placeholder="Enter customer address"
@@ -594,6 +964,7 @@ export default function CustomersPage() {
                 </div>
 
                 {/* LUNCH */}
+
                 <div>
                   <label className="mb-1 block text-sm font-medium text-gray-700">
                     Lunch Rate
@@ -602,7 +973,9 @@ export default function CustomersPage() {
                   <input
                     type="number"
                     min="0"
-                    value={form.lunch_rate}
+                    value={
+                      form.lunch_rate
+                    }
                     onChange={(e) =>
                       setForm({
                         ...form,
@@ -616,6 +989,7 @@ export default function CustomersPage() {
                 </div>
 
                 {/* DINNER */}
+
                 <div>
                   <label className="mb-1 block text-sm font-medium text-gray-700">
                     Dinner Rate
@@ -624,7 +998,9 @@ export default function CustomersPage() {
                   <input
                     type="number"
                     min="0"
-                    value={form.dinner_rate}
+                    value={
+                      form.dinner_rate
+                    }
                     onChange={(e) =>
                       setForm({
                         ...form,
@@ -638,6 +1014,7 @@ export default function CustomersPage() {
                 </div>
 
                 {/* START DATE */}
+
                 <div>
                   <label className="mb-1 block text-sm font-medium text-gray-700">
                     Start Date
@@ -645,7 +1022,9 @@ export default function CustomersPage() {
 
                   <input
                     type="date"
-                    value={form.start_date}
+                    value={
+                      form.start_date
+                    }
                     onChange={(e) =>
                       setForm({
                         ...form,
@@ -658,11 +1037,14 @@ export default function CustomersPage() {
                 </div>
 
                 {/* ACTIVE */}
+
                 <div className="flex items-center">
                   <label className="flex cursor-pointer items-center gap-3">
                     <input
                       type="checkbox"
-                      checked={form.active}
+                      checked={
+                        form.active
+                      }
                       onChange={(e) =>
                         setForm({
                           ...form,
@@ -682,12 +1064,17 @@ export default function CustomersPage() {
               </div>
 
               {/* FORM BUTTONS */}
+
               <div className="mt-7 flex flex-col gap-3 sm:flex-row sm:justify-end">
 
                 <button
                   type="button"
-                  onClick={closeForm}
-                  disabled={saving}
+                  onClick={
+                    closeForm
+                  }
+                  disabled={
+                    saving
+                  }
                   className="rounded-lg border border-gray-300 px-5 py-3 font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-50"
                 >
                   Cancel
@@ -695,7 +1082,9 @@ export default function CustomersPage() {
 
                 <button
                   type="submit"
-                  disabled={saving}
+                  disabled={
+                    saving
+                  }
                   className="rounded-lg bg-green-600 px-6 py-3 font-semibold text-white hover:bg-green-700 disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   {saving
@@ -710,24 +1099,36 @@ export default function CustomersPage() {
           </div>
         )}
 
+        {/* ================================================= */}
         {/* CUSTOMER LIST */}
+        {/* ================================================= */}
+
         <div className="rounded-xl bg-white shadow-sm">
 
           <div className="border-b border-gray-100 p-5">
-            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
 
-              <h2 className="text-lg font-bold text-gray-900">
-                Customer List
-              </h2>
+            <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+
+              <div>
+                <h2 className="text-lg font-bold text-gray-900">
+                  Customer List
+                </h2>
+
+                <p className="mt-1 text-sm text-gray-500">
+                  Wallet balance is maintained separately from billing.
+                </p>
+              </div>
 
               <span className="text-sm text-gray-500">
                 {filteredCustomers.length} customer
-                {filteredCustomers.length !== 1
+                {filteredCustomers.length !==
+                1
                   ? "s"
                   : ""}
               </span>
 
             </div>
+
           </div>
 
           {loading ? (
@@ -746,7 +1147,9 @@ export default function CustomersPage() {
 
               {!search && (
                 <button
-                  onClick={openAddForm}
+                  onClick={
+                    openAddForm
+                  }
                   className="mt-4 rounded-lg bg-green-600 px-5 py-2.5 font-semibold text-white hover:bg-green-700"
                 >
                   + Add First Customer
@@ -757,9 +1160,10 @@ export default function CustomersPage() {
           ) : (
             <div className="overflow-x-auto">
 
-              <table className="w-full min-w-[1100px]">
+              <table className="w-full min-w-[1450px]">
 
                 <thead className="bg-gray-50">
+
                   <tr>
 
                     <th className="px-5 py-4 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">
@@ -779,6 +1183,10 @@ export default function CustomersPage() {
                     </th>
 
                     <th className="px-5 py-4 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">
+                      Wallet
+                    </th>
+
+                    <th className="px-5 py-4 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">
                       Start Date
                     </th>
 
@@ -795,151 +1203,523 @@ export default function CustomersPage() {
                     </th>
 
                   </tr>
+
                 </thead>
 
                 <tbody className="divide-y divide-gray-100">
 
                   {filteredCustomers.map(
-                    (customer) => (
-                      <tr
-                        key={customer.id}
-                        className="hover:bg-gray-50"
-                      >
+                    (customer) => {
+                      const balance =
+                        getWalletBalance(
+                          customer.id
+                        );
 
-                        {/* CUSTOMER */}
-                        <td className="px-5 py-4">
-                          <div className="font-semibold text-gray-900">
-                            {customer.name}
-                          </div>
+                      return (
+                        <tr
+                          key={
+                            customer.id
+                          }
+                          className="hover:bg-gray-50"
+                        >
 
-                          {customer.address && (
-                            <div className="mt-1 max-w-xs truncate text-xs text-gray-500">
-                              {customer.address}
+                          {/* CUSTOMER */}
+
+                          <td className="px-5 py-4">
+
+                            <div className="font-semibold text-gray-900">
+                              {
+                                customer.name
+                              }
                             </div>
-                          )}
-                        </td>
 
-                        {/* PHONE */}
-                        <td className="px-5 py-4 text-sm text-gray-600">
-                          {customer.phone ||
-                            "-"}
-                        </td>
+                            {customer.address && (
+                              <div className="mt-1 max-w-xs truncate text-xs text-gray-500">
+                                {
+                                  customer.address
+                                }
+                              </div>
+                            )}
 
-                        {/* LUNCH */}
-                        <td className="px-5 py-4 text-sm font-medium text-gray-700">
-                          {customer.lunch_rate !==
-                          null
-                            ? `₹${customer.lunch_rate}`
-                            : "-"}
-                        </td>
+                          </td>
 
-                        {/* DINNER */}
-                        <td className="px-5 py-4 text-sm font-medium text-gray-700">
-                          {customer.dinner_rate !==
-                          null
-                            ? `₹${customer.dinner_rate}`
-                            : "-"}
-                        </td>
+                          {/* PHONE */}
 
-                        {/* START DATE */}
-                        <td className="px-5 py-4 text-sm text-gray-600">
-                          {customer.start_date ||
-                            "-"}
-                        </td>
+                          <td className="px-5 py-4 text-sm text-gray-600">
+                            {customer.phone ||
+                              "-"}
+                          </td>
 
-                        {/* LOGIN */}
-                        <td className="px-5 py-4">
+                          {/* LUNCH */}
 
-                          {customer.auth_user_id ? (
-                            <span className="inline-flex rounded-full bg-green-100 px-3 py-1 text-xs font-semibold text-green-700">
-                              Login Active
-                            </span>
-                          ) : (
-                            <button
-                              onClick={() =>
-                                createLoginAccount(
-                                  customer
-                                )
-                              }
-                              disabled={
-                                creatingLoginId ===
-                                customer.id
-                              }
-                              className="rounded-lg bg-purple-600 px-3 py-2 text-xs font-semibold text-white hover:bg-purple-700 disabled:cursor-not-allowed disabled:opacity-50"
+                          <td className="px-5 py-4 text-sm font-medium text-gray-700">
+                            {customer.lunch_rate !==
+                            null
+                              ? `₹${customer.lunch_rate}`
+                              : "-"}
+                          </td>
+
+                          {/* DINNER */}
+
+                          <td className="px-5 py-4 text-sm font-medium text-gray-700">
+                            {customer.dinner_rate !==
+                            null
+                              ? `₹${customer.dinner_rate}`
+                              : "-"}
+                          </td>
+
+                          {/* WALLET */}
+
+                          <td className="px-5 py-4">
+
+                            <div
+                              className={`mb-2 text-lg font-bold ${
+                                balance >
+                                0
+                                  ? "text-green-600"
+                                  : balance <
+                                    0
+                                  ? "text-red-600"
+                                  : "text-gray-500"
+                              }`}
                             >
-                              {creatingLoginId ===
-                              customer.id
-                                ? "Creating..."
-                                : "Create Login"}
-                            </button>
-                          )}
+                              ₹
+                              {balance.toFixed(
+                                2
+                              )}
+                            </div>
 
-                        </td>
+                            <div className="flex gap-2">
 
-                        {/* STATUS */}
-                        <td className="px-5 py-4">
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  openWalletModal(
+                                    customer,
+                                    "credit"
+                                  )
+                                }
+                                className="rounded-lg bg-green-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-green-700"
+                              >
+                                + Add
+                              </button>
 
-                          <button
-                            onClick={() =>
-                              toggleActive(
-                                customer
-                              )
-                            }
-                            className={`rounded-full px-3 py-1 text-xs font-semibold ${
-                              customer.active
-                                ? "bg-green-100 text-green-700"
-                                : "bg-gray-100 text-gray-600"
-                            }`}
-                          >
-                            {customer.active
-                              ? "Active"
-                              : "Inactive"}
-                          </button>
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  openWalletModal(
+                                    customer,
+                                    "debit"
+                                  )
+                                }
+                                className="rounded-lg bg-red-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-red-700"
+                              >
+                                − Deduct
+                              </button>
 
-                        </td>
+                            </div>
 
-                        {/* ACTIONS */}
-                        <td className="px-5 py-4">
+                          </td>
 
-                          <div className="flex justify-end gap-2">
+                          {/* START DATE */}
 
-                            <button
-                              onClick={() =>
-                                openEditForm(
-                                  customer
-                                )
-                              }
-                              className="rounded-lg border border-blue-200 px-3 py-2 text-sm font-medium text-blue-600 hover:bg-blue-50"
-                            >
-                              Edit
-                            </button>
+                          <td className="px-5 py-4 text-sm text-gray-600">
+                            {customer.start_date ||
+                              "-"}
+                          </td>
 
-                            <button
-                              onClick={() =>
-                                deleteCustomer(
+                          {/* LOGIN */}
+
+                          <td className="px-5 py-4">
+
+                            {customer.auth_user_id ? (
+                              <span className="inline-flex rounded-full bg-green-100 px-3 py-1 text-xs font-semibold text-green-700">
+                                Login Active
+                              </span>
+                            ) : (
+                              <button
+                                onClick={() =>
+                                  createLoginAccount(
+                                    customer
+                                  )
+                                }
+                                disabled={
+                                  creatingLoginId ===
                                   customer.id
+                                }
+                                className="rounded-lg bg-purple-600 px-3 py-2 text-xs font-semibold text-white hover:bg-purple-700 disabled:cursor-not-allowed disabled:opacity-50"
+                              >
+                                {creatingLoginId ===
+                                customer.id
+                                  ? "Creating..."
+                                  : "Create Login"}
+                              </button>
+                            )}
+
+                          </td>
+
+                          {/* STATUS */}
+
+                          <td className="px-5 py-4">
+
+                            <button
+                              onClick={() =>
+                                toggleActive(
+                                  customer
                                 )
                               }
-                              className="rounded-lg border border-red-200 px-3 py-2 text-sm font-medium text-red-600 hover:bg-red-50"
+                              className={`rounded-full px-3 py-1 text-xs font-semibold ${
+                                customer.active
+                                  ? "bg-green-100 text-green-700"
+                                  : "bg-gray-100 text-gray-600"
+                              }`}
                             >
-                              Delete
+                              {customer.active
+                                ? "Active"
+                                : "Inactive"}
                             </button>
 
-                          </div>
+                          </td>
 
-                        </td>
+                          {/* ACTIONS */}
 
-                      </tr>
-                    )
+                          <td className="px-5 py-4">
+
+                            <div className="flex justify-end gap-2">
+
+                              <button
+                                onClick={() =>
+                                  openEditForm(
+                                    customer
+                                  )
+                                }
+                                className="rounded-lg border border-blue-200 px-3 py-2 text-sm font-medium text-blue-600 hover:bg-blue-50"
+                              >
+                                Edit
+                              </button>
+
+                              <button
+                                onClick={() =>
+                                  deleteCustomer(
+                                    customer.id
+                                  )
+                                }
+                                className="rounded-lg border border-red-200 px-3 py-2 text-sm font-medium text-red-600 hover:bg-red-50"
+                              >
+                                Delete
+                              </button>
+
+                            </div>
+
+                          </td>
+
+                        </tr>
+                      );
+                    }
                   )}
 
                 </tbody>
+
               </table>
 
             </div>
           )}
+
         </div>
       </div>
+
+      {/* ================================================= */}
+      {/* WALLET MODAL */}
+      {/* ================================================= */}
+
+      {walletModalOpen &&
+        walletCustomer && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+
+            <div className="w-full max-w-md rounded-2xl bg-white shadow-2xl">
+
+              {/* MODAL HEADER */}
+
+              <div
+                className={`rounded-t-2xl p-5 ${
+                  walletAction ===
+                  "credit"
+                    ? "bg-green-600"
+                    : "bg-red-600"
+                }`}
+              >
+
+                <div className="flex items-center justify-between">
+
+                  <div>
+                    <h2 className="text-xl font-bold text-white">
+                      {walletAction ===
+                      "credit"
+                        ? "Add Money"
+                        : "Deduct Money"}
+                    </h2>
+
+                    <p className="mt-1 text-sm text-white/80">
+                      {
+                        walletCustomer.name
+                      }
+                    </p>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={
+                      closeWalletModal
+                    }
+                    disabled={
+                      walletSaving
+                    }
+                    className="text-2xl text-white/80 hover:text-white disabled:opacity-50"
+                  >
+                    ×
+                  </button>
+
+                </div>
+
+              </div>
+
+              {/* CURRENT BALANCE */}
+
+              <div className="border-b border-gray-100 bg-gray-50 px-5 py-4">
+
+                <div className="flex items-center justify-between">
+
+                  <span className="text-sm font-medium text-gray-500">
+                    Current Wallet Balance
+                  </span>
+
+                  <span className="text-xl font-bold text-gray-900">
+                    ₹
+                    {getWalletBalance(
+                      walletCustomer.id
+                    ).toFixed(2)}
+                  </span>
+
+                </div>
+
+              </div>
+
+              {/* FORM */}
+
+              <form
+                onSubmit={
+                  submitWalletTransaction
+                }
+                className="p-5"
+              >
+
+                {walletError && (
+                  <div className="mb-5 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">
+                    {walletError}
+                  </div>
+                )}
+
+                {/* AMOUNT */}
+
+                <div className="mb-5">
+
+                  <label className="mb-2 block text-sm font-semibold text-gray-700">
+                    Amount
+                  </label>
+
+                  <div className="relative">
+
+                    <span className="absolute left-4 top-1/2 -translate-y-1/2 text-lg font-semibold text-gray-500">
+                      ₹
+                    </span>
+
+                    <input
+                      type="number"
+                      min="0.01"
+                      step="0.01"
+                      value={
+                        walletAmount
+                      }
+                      onChange={(e) =>
+                        setWalletAmount(
+                          e.target.value
+                        )
+                      }
+                      placeholder="0.00"
+                      autoFocus
+                      className="w-full rounded-lg border border-gray-300 py-3 pl-9 pr-4 text-lg font-semibold outline-none focus:border-green-500 focus:ring-2 focus:ring-green-100"
+                      required
+                    />
+
+                  </div>
+
+                </div>
+
+                {/* DESCRIPTION */}
+
+                <div className="mb-6">
+
+                  <label className="mb-2 block text-sm font-semibold text-gray-700">
+                    Description
+                  </label>
+
+                  <textarea
+                    value={
+                      walletDescription
+                    }
+                    onChange={(e) =>
+                      setWalletDescription(
+                        e.target.value
+                      )
+                    }
+                    placeholder={
+                      walletAction ===
+                      "credit"
+                        ? "Example: Cash payment received"
+                        : "Example: Adjustment / correction"
+                    }
+                    rows={3}
+                    className="w-full rounded-lg border border-gray-300 px-4 py-3 outline-none focus:border-green-500 focus:ring-2 focus:ring-green-100"
+                  />
+
+                </div>
+
+                {/* PREVIEW */}
+
+                {walletAmount &&
+                  Number(
+                    walletAmount
+                  ) > 0 && (
+                    <div className="mb-6 rounded-xl border border-gray-200 bg-gray-50 p-4">
+
+                      <div className="flex items-center justify-between text-sm">
+
+                        <span className="text-gray-500">
+                          Current Balance
+                        </span>
+
+                        <span className="font-semibold text-gray-800">
+                          ₹
+                          {getWalletBalance(
+                            walletCustomer.id
+                          ).toFixed(
+                            2
+                          )}
+                        </span>
+
+                      </div>
+
+                      <div className="my-2 border-t border-gray-200" />
+
+                      <div className="flex items-center justify-between text-sm">
+
+                        <span className="text-gray-500">
+                          {walletAction ===
+                          "credit"
+                            ? "Adding"
+                            : "Deducting"}
+                        </span>
+
+                        <span
+                          className={`font-semibold ${
+                            walletAction ===
+                            "credit"
+                              ? "text-green-600"
+                              : "text-red-600"
+                          }`}
+                        >
+                          {walletAction ===
+                          "credit"
+                            ? "+"
+                            : "-"}
+                          ₹
+                          {Number(
+                            walletAmount
+                          ).toFixed(
+                            2
+                          )}
+                        </span>
+
+                      </div>
+
+                      <div className="my-2 border-t border-gray-200" />
+
+                      <div className="flex items-center justify-between">
+
+                        <span className="font-semibold text-gray-700">
+                          New Balance
+                        </span>
+
+                        <span className="text-lg font-bold text-gray-900">
+                          ₹
+                          {(
+                            walletAction ===
+                            "credit"
+                              ? getWalletBalance(
+                                  walletCustomer.id
+                                ) +
+                                Number(
+                                  walletAmount
+                                )
+                              : getWalletBalance(
+                                  walletCustomer.id
+                                ) -
+                                Number(
+                                  walletAmount
+                                )
+                          ).toFixed(2)}
+                        </span>
+
+                      </div>
+
+                    </div>
+                  )}
+
+                {/* BUTTONS */}
+
+                <div className="flex gap-3">
+
+                  <button
+                    type="button"
+                    onClick={
+                      closeWalletModal
+                    }
+                    disabled={
+                      walletSaving
+                    }
+                    className="flex-1 rounded-lg border border-gray-300 px-4 py-3 font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+                  >
+                    Cancel
+                  </button>
+
+                  <button
+                    type="submit"
+                    disabled={
+                      walletSaving
+                    }
+                    className={`flex-1 rounded-lg px-4 py-3 font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50 ${
+                      walletAction ===
+                      "credit"
+                        ? "bg-green-600 hover:bg-green-700"
+                        : "bg-red-600 hover:bg-red-700"
+                    }`}
+                  >
+                    {walletSaving
+                      ? "Processing..."
+                      : walletAction ===
+                        "credit"
+                      ? "Add Money"
+                      : "Deduct Money"}
+                  </button>
+
+                </div>
+
+              </form>
+
+            </div>
+
+          </div>
+        )}
     </div>
   );
 }

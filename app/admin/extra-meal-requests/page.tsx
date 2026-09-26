@@ -15,9 +15,6 @@ type ExtraMealRequest = {
   note: string | null;
   created_at: string;
   approved_at: string | null;
-
-  meal_date?: string | null;
-  meal_type?: "lunch" | "dinner" | null;
 };
 
 type Customer = {
@@ -41,6 +38,10 @@ type RequestWithDetails = ExtraMealRequest & {
 };
 
 type FilterType = "all" | RequestStatus;
+
+/* ===================================================== */
+/* DATE HELPERS */
+/* ===================================================== */
 
 function formatDate(value: string | null | undefined) {
   if (!value) return "-";
@@ -82,44 +83,77 @@ function formatDateTime(value: string | null) {
   });
 }
 
-function getIncludedDays(
-  request: RequestWithDetails
-) {
-  return request.days.filter(
-    (day) => day.included
-  );
+/* ===================================================== */
+/* MEAL HELPERS */
+/* ===================================================== */
+
+function getIncludedDays(request: RequestWithDetails) {
+  return request.days.filter((day) => day.included);
 }
 
-function getLunchCount(
-  request: RequestWithDetails
-) {
+function getLunchCount(request: RequestWithDetails) {
   return getIncludedDays(request).filter(
     (day) => day.meal_type === "lunch"
   ).length;
 }
 
-function getDinnerCount(
-  request: RequestWithDetails
-) {
+function getDinnerCount(request: RequestWithDetails) {
   return getIncludedDays(request).filter(
     (day) => day.meal_type === "dinner"
   ).length;
 }
 
-function getSelectedMealDays(
-  request: RequestWithDetails
-) {
+/*
+ * Actual unique calendar days.
+ *
+ * Example:
+ *
+ * 23 Aug Lunch
+ * 23 Aug Dinner
+ * 24 Aug Lunch
+ * 24 Aug Dinner
+ *
+ * = 2 meal days
+ */
+function getActualMealDays(request: RequestWithDetails) {
+  const uniqueDates = new Set(
+    getIncludedDays(request).map((day) => day.meal_date)
+  );
+
+  return uniqueDates.size;
+}
+
+/*
+ * Meal slots means individual lunch/dinner selections.
+ *
+ * Example:
+ *
+ * 23 Lunch
+ * 23 Dinner
+ * 24 Lunch
+ * 24 Dinner
+ *
+ * = 4 meal slots
+ */
+function getSelectedMealSlots(request: RequestWithDetails) {
   return getIncludedDays(request).length;
 }
 
-function getTotalGuestMeals(
-  request: RequestWithDetails
-) {
+/*
+ * Total guest meals:
+ *
+ * selected meal slots × guest quantity
+ */
+function getTotalGuestMeals(request: RequestWithDetails) {
   return (
-    getSelectedMealDays(request) *
+    getSelectedMealSlots(request) *
     Number(request.quantity || 0)
   );
 }
+
+/* ===================================================== */
+/* STATUS BADGE */
+/* ===================================================== */
 
 function StatusBadge({
   status,
@@ -149,10 +183,12 @@ function StatusBadge({
   );
 }
 
+/* ===================================================== */
+/* MAIN PAGE */
+/* ===================================================== */
+
 export default function ExtraMealRequestsPage() {
-  const [requests, setRequests] = useState<
-    RequestWithDetails[]
-  >([]);
+  const [requests, setRequests] = useState<RequestWithDetails[]>([]);
 
   const [loading, setLoading] = useState(true);
 
@@ -166,15 +202,17 @@ export default function ExtraMealRequestsPage() {
   const [filter, setFilter] =
     useState<FilterType>("all");
 
+  /* =================================================== */
+  /* LOAD REQUESTS */
+  /* =================================================== */
+
   async function loadRequests() {
     setLoading(true);
     setError("");
 
     try {
       /*
-       * =====================================================
-       * LOAD EXTRA MEAL REQUESTS
-       * =====================================================
+       * LOAD REQUESTS
        */
 
       const {
@@ -192,9 +230,7 @@ export default function ExtraMealRequestsPage() {
           status,
           note,
           created_at,
-          approved_at,
-          meal_date,
-          meal_type
+          approved_at
           `
         )
         .order("created_at", {
@@ -214,9 +250,7 @@ export default function ExtraMealRequestsPage() {
       }
 
       /*
-       * =====================================================
        * LOAD CUSTOMERS
-       * =====================================================
        */
 
       const customerIds = Array.from(
@@ -251,9 +285,7 @@ export default function ExtraMealRequestsPage() {
       });
 
       /*
-       * =====================================================
-       * LOAD SELECTED MEAL DAYS
-       * =====================================================
+       * LOAD MEAL DAYS
        */
 
       const requestIds =
@@ -267,7 +299,14 @@ export default function ExtraMealRequestsPage() {
       } = await supabase
         .from("extra_meal_request_days")
         .select(
-          "id,request_id,meal_date,meal_type,included,created_at"
+          `
+          id,
+          request_id,
+          meal_date,
+          meal_type,
+          included,
+          created_at
+          `
         )
         .in("request_id", requestIds)
         .order("meal_date", {
@@ -297,9 +336,7 @@ export default function ExtraMealRequestsPage() {
       });
 
       /*
-       * =====================================================
-       * COMBINE DATA
-       * =====================================================
+       * COMBINE EVERYTHING
        */
 
       const finalRequests: RequestWithDetails[] =
@@ -338,11 +375,9 @@ export default function ExtraMealRequestsPage() {
     loadRequests();
   }, []);
 
-  /*
-   * =====================================================
-   * SUMMARY COUNTS
-   * =====================================================
-   */
+  /* =================================================== */
+  /* SUMMARY COUNTS */
+  /* =================================================== */
 
   const pendingCount = useMemo(
     () =>
@@ -371,11 +406,9 @@ export default function ExtraMealRequestsPage() {
     [requests]
   );
 
-  /*
-   * =====================================================
-   * FILTER
-   * =====================================================
-   */
+  /* =================================================== */
+  /* FILTER */
+  /* =================================================== */
 
   const filteredRequests = useMemo(() => {
     if (filter === "all") {
@@ -388,11 +421,9 @@ export default function ExtraMealRequestsPage() {
     );
   }, [requests, filter]);
 
-  /*
-   * =====================================================
-   * UPDATE REQUEST STATUS
-   * =====================================================
-   */
+  /* =================================================== */
+  /* UPDATE STATUS */
+  /* =================================================== */
 
   async function updateRequestStatus(
     requestId: string,
@@ -440,10 +471,6 @@ export default function ExtraMealRequestsPage() {
         setSuccess(
           "Extra meal request rejected successfully."
         );
-      } else {
-        setSuccess(
-          "Extra meal request status updated successfully."
-        );
       }
 
       await loadRequests();
@@ -463,11 +490,9 @@ export default function ExtraMealRequestsPage() {
     }
   }
 
-  /*
-   * =====================================================
-   * REFRESH
-   * =====================================================
-   */
+  /* =================================================== */
+  /* REFRESH */
+  /* =================================================== */
 
   async function refreshRequests() {
     setSuccess("");
@@ -480,17 +505,16 @@ export default function ExtraMealRequestsPage() {
     );
   }
 
-  /*
-   * =====================================================
-   * LOADING
-   * =====================================================
-   */
+  /* =================================================== */
+  /* LOADING */
+  /* =================================================== */
 
   if (loading) {
     return (
       <main className="min-h-screen bg-gray-100 p-6">
         <div className="mx-auto max-w-7xl">
           <div className="rounded-2xl bg-white p-10 text-center shadow-sm">
+
             <div className="mx-auto h-10 w-10 animate-spin rounded-full border-4 border-gray-200 border-t-green-600" />
 
             <h1 className="mt-5 text-xl font-bold text-gray-900">
@@ -500,24 +524,30 @@ export default function ExtraMealRequestsPage() {
             <p className="mt-2 text-sm text-gray-500">
               Please wait.
             </p>
+
           </div>
         </div>
       </main>
     );
   }
 
+  /* =================================================== */
+  /* PAGE */
+  /* =================================================== */
+
   return (
     <main className="min-h-screen bg-gray-100 p-4 md:p-6">
+
       <div className="mx-auto max-w-7xl">
 
-        {/* ================================================= */}
         {/* HEADER */}
-        {/* ================================================= */}
 
         <header className="mb-6 rounded-2xl bg-gray-900 px-6 py-7 text-white shadow-sm">
+
           <div className="flex flex-col gap-5 md:flex-row md:items-center md:justify-between">
 
             <div>
+
               <p className="text-sm font-semibold tracking-wide text-green-400">
                 ADMIN PANEL
               </p>
@@ -529,6 +559,7 @@ export default function ExtraMealRequestsPage() {
               <p className="mt-2 text-sm text-gray-300">
                 Manage customer guest meal requests.
               </p>
+
             </div>
 
             <button
@@ -541,16 +572,16 @@ export default function ExtraMealRequestsPage() {
             </button>
 
           </div>
+
         </header>
 
-        {/* ================================================= */}
         {/* ERROR */}
-        {/* ================================================= */}
 
         {error && (
           <div className="mb-5 flex flex-col gap-3 rounded-xl border border-red-200 bg-red-50 p-4 text-red-700 sm:flex-row sm:items-center sm:justify-between">
 
             <div>
+
               <p className="font-bold">
                 Error
               </p>
@@ -558,6 +589,7 @@ export default function ExtraMealRequestsPage() {
               <p className="mt-1 text-sm">
                 {error}
               </p>
+
             </div>
 
             <button
@@ -571,9 +603,7 @@ export default function ExtraMealRequestsPage() {
           </div>
         )}
 
-        {/* ================================================= */}
         {/* SUCCESS */}
-        {/* ================================================= */}
 
         {success && (
           <div className="mb-5 rounded-xl border border-green-200 bg-green-50 p-4 text-green-700">
@@ -589,95 +619,43 @@ export default function ExtraMealRequestsPage() {
           </div>
         )}
 
-        {/* ================================================= */}
         {/* SUMMARY */}
-        {/* ================================================= */}
 
         <section className="mb-6 grid gap-4 sm:grid-cols-3">
 
-          {/* PENDING */}
+          <SummaryCard
+            title="Pending"
+            count={pendingCount}
+            description="Requests waiting for approval"
+            active={filter === "pending"}
+            onClick={() => setFilter("pending")}
+            textClass="text-yellow-600"
+            ringClass="ring-yellow-400"
+          />
 
-          <button
-            type="button"
-            onClick={() =>
-              setFilter("pending")
-            }
-            className={`rounded-2xl bg-white p-5 text-left shadow-sm transition hover:shadow-md ${
-              filter === "pending"
-                ? "ring-2 ring-yellow-400"
-                : ""
-            }`}
-          >
-            <p className="text-sm font-semibold text-gray-500">
-              Pending
-            </p>
+          <SummaryCard
+            title="Approved"
+            count={approvedCount}
+            description="Approved guest requests"
+            active={filter === "approved"}
+            onClick={() => setFilter("approved")}
+            textClass="text-green-600"
+            ringClass="ring-green-400"
+          />
 
-            <p className="mt-2 text-3xl font-bold text-yellow-600">
-              {pendingCount}
-            </p>
-
-            <p className="mt-1 text-xs text-gray-400">
-              Requests waiting for approval
-            </p>
-          </button>
-
-          {/* APPROVED */}
-
-          <button
-            type="button"
-            onClick={() =>
-              setFilter("approved")
-            }
-            className={`rounded-2xl bg-white p-5 text-left shadow-sm transition hover:shadow-md ${
-              filter === "approved"
-                ? "ring-2 ring-green-400"
-                : ""
-            }`}
-          >
-            <p className="text-sm font-semibold text-gray-500">
-              Approved
-            </p>
-
-            <p className="mt-2 text-3xl font-bold text-green-600">
-              {approvedCount}
-            </p>
-
-            <p className="mt-1 text-xs text-gray-400">
-              Approved guest requests
-            </p>
-          </button>
-
-          {/* REJECTED */}
-
-          <button
-            type="button"
-            onClick={() =>
-              setFilter("rejected")
-            }
-            className={`rounded-2xl bg-white p-5 text-left shadow-sm transition hover:shadow-md ${
-              filter === "rejected"
-                ? "ring-2 ring-red-400"
-                : ""
-            }`}
-          >
-            <p className="text-sm font-semibold text-gray-500">
-              Rejected
-            </p>
-
-            <p className="mt-2 text-3xl font-bold text-red-600">
-              {rejectedCount}
-            </p>
-
-            <p className="mt-1 text-xs text-gray-400">
-              Rejected guest requests
-            </p>
-          </button>
+          <SummaryCard
+            title="Rejected"
+            count={rejectedCount}
+            description="Rejected guest requests"
+            active={filter === "rejected"}
+            onClick={() => setFilter("rejected")}
+            textClass="text-red-600"
+            ringClass="ring-red-400"
+          />
 
         </section>
 
-        {/* ================================================= */}
         {/* FILTERS */}
-        {/* ================================================= */}
 
         <section className="mb-6 rounded-2xl bg-white p-5 shadow-sm">
 
@@ -685,36 +663,28 @@ export default function ExtraMealRequestsPage() {
 
             <FilterButton
               active={filter === "all"}
-              onClick={() =>
-                setFilter("all")
-              }
+              onClick={() => setFilter("all")}
             >
               All ({requests.length})
             </FilterButton>
 
             <FilterButton
               active={filter === "pending"}
-              onClick={() =>
-                setFilter("pending")
-              }
+              onClick={() => setFilter("pending")}
             >
               Pending ({pendingCount})
             </FilterButton>
 
             <FilterButton
               active={filter === "approved"}
-              onClick={() =>
-                setFilter("approved")
-              }
+              onClick={() => setFilter("approved")}
             >
               Approved ({approvedCount})
             </FilterButton>
 
             <FilterButton
               active={filter === "rejected"}
-              onClick={() =>
-                setFilter("rejected")
-              }
+              onClick={() => setFilter("rejected")}
             >
               Rejected ({rejectedCount})
             </FilterButton>
@@ -723,15 +693,14 @@ export default function ExtraMealRequestsPage() {
 
         </section>
 
-        {/* ================================================= */}
-        {/* REQUEST LIST */}
-        {/* ================================================= */}
+        {/* REQUESTS */}
 
         <section className="rounded-2xl bg-white p-5 shadow-sm md:p-6">
 
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
 
             <div>
+
               <h2 className="text-2xl font-bold text-gray-900">
                 Requests
               </h2>
@@ -742,11 +711,11 @@ export default function ExtraMealRequestsPage() {
                   {filteredRequests.length}
                 </span>{" "}
                 request
-                {filteredRequests.length !==
-                1
+                {filteredRequests.length !== 1
                   ? "s"
                   : ""}
               </p>
+
             </div>
 
             <div className="rounded-full bg-gray-100 px-4 py-2 text-sm font-semibold text-gray-600">
@@ -755,8 +724,7 @@ export default function ExtraMealRequestsPage() {
 
           </div>
 
-          {filteredRequests.length ===
-          0 ? (
+          {filteredRequests.length === 0 ? (
             <div className="mt-6 rounded-2xl border border-dashed border-gray-300 bg-gray-50 p-10 text-center">
 
               <div className="text-5xl">
@@ -777,82 +745,205 @@ export default function ExtraMealRequestsPage() {
           ) : (
             <div className="mt-6 space-y-5">
 
-              {filteredRequests.map(
-                (request) => {
+              {filteredRequests.map((request) => {
 
-                  const lunchCount =
-                    getLunchCount(request);
+                const lunchCount =
+                  getLunchCount(request);
 
-                  const dinnerCount =
-                    getDinnerCount(request);
+                const dinnerCount =
+                  getDinnerCount(request);
 
-                  const selectedMealDays =
-                    getSelectedMealDays(
-                      request
-                    );
+                const actualMealDays =
+                  getActualMealDays(request);
 
-                  const totalGuestMeals =
-                    getTotalGuestMeals(
-                      request
-                    );
+                const selectedMealSlots =
+                  getSelectedMealSlots(request);
 
-                  const isProcessing =
-                    processingId ===
-                    request.id;
+                const totalGuestMeals =
+                  getTotalGuestMeals(request);
 
-                  return (
-                    <article
-                      key={request.id}
-                      className="overflow-hidden rounded-2xl border border-gray-200 bg-white"
-                    >
+                const quantity =
+                  Number(request.quantity || 0);
 
-                      {/* REQUEST HEADER */}
+                const isProcessing =
+                  processingId === request.id;
 
-                      <div className="border-b border-gray-200 bg-gray-50 p-5">
+                const includedDays =
+                  getIncludedDays(request);
 
-                        <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                return (
+                  <article
+                    key={request.id}
+                    className="overflow-hidden rounded-2xl border border-gray-200 bg-white"
+                  >
 
-                          <div>
+                    {/* REQUEST HEADER */}
 
-                            <div className="flex flex-wrap items-center gap-3">
+                    <div className="border-b border-gray-200 bg-gray-50 p-5">
 
-                              <h3 className="text-xl font-bold text-gray-900">
-                                {request.customer
-                                  ?.name ||
-                                  "Unknown Customer"}
-                              </h3>
+                      <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
 
-                              <StatusBadge
-                                status={
-                                  request.status
-                                }
-                              />
+                        <div>
 
-                            </div>
+                          <div className="flex flex-wrap items-center gap-3">
 
-                            <p className="mt-1 text-sm text-gray-500">
-                              {request.customer
-                                ?.phone ||
-                                "Phone not available"}
-                            </p>
+                            <h3 className="text-xl font-bold text-gray-900">
+                              {request.customer?.name ||
+                                "Unknown Customer"}
+                            </h3>
 
-                            <p className="mt-2 text-xs text-gray-400">
-                              Request ID:{" "}
-                              {request.id}
-                            </p>
+                            <StatusBadge
+                              status={request.status}
+                            />
 
                           </div>
 
-                          <div className="text-left lg:text-right">
+                          <p className="mt-1 text-sm text-gray-500">
+                            {request.customer?.phone ||
+                              "Phone not available"}
+                          </p>
 
-                            <p className="text-xs text-gray-500">
-                              Requested
+                          <p className="mt-2 text-xs text-gray-400">
+                            Request ID: {request.id}
+                          </p>
+
+                        </div>
+
+                        <div className="text-left lg:text-right">
+
+                          <p className="text-xs text-gray-500">
+                            Requested
+                          </p>
+
+                          <p className="mt-1 text-sm font-semibold text-gray-700">
+                            {formatDateTime(
+                              request.created_at
+                            )}
+                          </p>
+
+                        </div>
+
+                      </div>
+
+                    </div>
+
+                    {/* MAIN DETAILS */}
+
+                    <div className="p-5">
+
+                      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-6">
+
+                        <InfoBox
+                          label="Guest Stay"
+                          value={
+                            request.start_date &&
+                            request.end_date
+                              ? `${formatDate(
+                                  request.start_date
+                                )} → ${formatDate(
+                                  request.end_date
+                                )}`
+                              : request.start_date
+                              ? formatDate(
+                                  request.start_date
+                                )
+                              : "-"
+                          }
+                        />
+
+                        <InfoBox
+                          label="Guest Quantity"
+                          value={`${quantity} guest${
+                            quantity !== 1
+                              ? "s"
+                              : ""
+                          }`}
+                        />
+
+                        <InfoBox
+                          label="Meal Days"
+                          value={`${actualMealDays} day${
+                            actualMealDays !== 1
+                              ? "s"
+                              : ""
+                          }`}
+                        />
+
+                        <InfoBox
+                          label="Lunch"
+                          value={`${lunchCount} slot${
+                            lunchCount !== 1
+                              ? "s"
+                              : ""
+                          }`}
+                        />
+
+                        <InfoBox
+                          label="Dinner"
+                          value={`${dinnerCount} slot${
+                            dinnerCount !== 1
+                              ? "s"
+                              : ""
+                          }`}
+                        />
+
+                        <InfoBox
+                          label="Total Guest Meals"
+                          value={`${totalGuestMeals}`}
+                          highlight
+                        />
+
+                      </div>
+
+                      {/* MEAL SUMMARY */}
+
+                      <div className="mt-5 rounded-xl border border-green-200 bg-green-50 p-4">
+
+                        <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+
+                          <div>
+
+                            <p className="text-sm font-bold text-gray-800">
+                              Meal Summary
                             </p>
 
-                            <p className="mt-1 text-sm font-semibold text-gray-700">
-                              {formatDateTime(
-                                request.created_at
-                              )}
+                            <div className="mt-2 flex flex-wrap gap-2">
+
+                              <span className="rounded-lg bg-white px-3 py-2 text-sm font-semibold text-green-700 shadow-sm">
+                                🍱 Lunch: {lunchCount}
+                              </span>
+
+                              <span className="rounded-lg bg-white px-3 py-2 text-sm font-semibold text-green-700 shadow-sm">
+                                🌙 Dinner: {dinnerCount}
+                              </span>
+
+                              <span className="rounded-lg bg-white px-3 py-2 text-sm font-semibold text-gray-700 shadow-sm">
+                                📅 Meal Days: {actualMealDays}
+                              </span>
+
+                              <span className="rounded-lg bg-white px-3 py-2 text-sm font-semibold text-gray-700 shadow-sm">
+                                🍽️ Meal Slots:{" "}
+                                {selectedMealSlots}
+                              </span>
+
+                            </div>
+
+                          </div>
+
+                          <div className="rounded-xl bg-white px-5 py-3 text-center shadow-sm">
+
+                            <p className="text-xs font-semibold text-gray-500">
+                              Calculation
+                            </p>
+
+                            <p className="mt-1 text-lg font-bold text-green-700">
+                              {selectedMealSlots} ×{" "}
+                              {quantity} ={" "}
+                              {totalGuestMeals}
+                            </p>
+
+                            <p className="text-xs text-gray-500">
+                              meal slots × guests
                             </p>
 
                           </div>
@@ -861,289 +952,211 @@ export default function ExtraMealRequestsPage() {
 
                       </div>
 
-                      {/* MAIN DETAILS */}
+                      {/* REQUEST NOTE */}
 
-                      <div className="p-5">
+                      {request.note && (
+                        <div className="mt-5 rounded-xl bg-gray-50 p-4">
 
-                        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
+                          <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">
+                            Customer Note
+                          </p>
 
-                          {/* DATES */}
-
-                          <InfoBox
-                            label="Guest Stay"
-                            value={
-                              request.start_date &&
-                              request.end_date
-                                ? `${formatDate(
-                                    request.start_date
-                                  )} → ${formatDate(
-                                    request.end_date
-                                  )}`
-                                : request.start_date
-                                ? formatDate(
-                                    request.start_date
-                                  )
-                                : "-"
-                            }
-                          />
-
-                          {/* QUANTITY */}
-
-                          <InfoBox
-                            label="Guest Quantity"
-                            value={`${Number(
-                              request.quantity ||
-                                0
-                            )}`}
-                          />
-
-                          {/* LUNCH */}
-
-                          <InfoBox
-                            label="Lunch"
-                            value={`${lunchCount} day(s)`}
-                          />
-
-                          {/* DINNER */}
-
-                          <InfoBox
-                            label="Dinner"
-                            value={`${dinnerCount} day(s)`}
-                          />
-
-                          {/* TOTAL */}
-
-                          <InfoBox
-                            label="Total Extra Meals"
-                            value={`${totalGuestMeals}`}
-                            highlight
-                          />
+                          <p className="mt-1 text-sm text-gray-700">
+                            {request.note}
+                          </p>
 
                         </div>
+                      )}
 
-                        {/* SELECTED MEAL SUMMARY */}
+                      {/* MEAL DETAILS */}
 
-                        <div className="mt-5 rounded-xl border border-green-200 bg-green-50 p-4">
+                      <div className="mt-6">
 
-                          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
 
-                            <div>
-
-                              <p className="text-sm font-semibold text-gray-700">
-                                Selected Meals
-                              </p>
-
-                              <p className="mt-1 text-sm text-gray-600">
-                                🍱 Lunch:{" "}
-                                <span className="font-bold text-green-700">
-                                  {lunchCount}
-                                </span>
-
-                                {" • "}
-
-                                🌙 Dinner:{" "}
-                                <span className="font-bold text-green-700">
-                                  {dinnerCount}
-                                </span>
-                              </p>
-
-                            </div>
-
-                            <div className="rounded-lg bg-white px-4 py-2 text-sm font-bold text-green-700 shadow-sm">
-
-                              {selectedMealDays} selected ×{" "}
-
-                              {Number(
-                                request.quantity ||
-                                  0
-                              )} guest
-                              {Number(
-                                request.quantity ||
-                                  0
-                              ) !== 1
-                                ? "s"
-                                : ""}{" "}
-
-                              ={" "}
-
-                              {totalGuestMeals} meals
-
-                            </div>
-
-                          </div>
-
-                        </div>
-
-                        {/* REQUEST NOTE */}
-
-                        {request.note && (
-                          <div className="mt-5 rounded-xl bg-gray-50 p-4">
-
-                            <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">
-                              Customer Note
-                            </p>
-
-                            <p className="mt-1 text-sm text-gray-700">
-                              {request.note}
-                            </p>
-
-                          </div>
-                        )}
-
-                        {/* SELECTED DAYS */}
-
-                        <div className="mt-5">
-
-                          <div className="flex items-center justify-between">
+                          <div>
 
                             <h4 className="text-lg font-bold text-gray-900">
                               Meal Details
                             </h4>
 
-                            <span className="rounded-full bg-gray-100 px-3 py-1 text-xs font-semibold text-gray-600">
-                              {selectedMealDays} selected
-                            </span>
+                            <p className="mt-1 text-sm text-gray-500">
+                              Every selected lunch and dinner is shown separately.
+                            </p>
 
                           </div>
 
-                          {request.days.filter(
-                            (day) =>
-                              day.included
-                          ).length ===
-                          0 ? (
-                            <div className="mt-3 rounded-xl border border-yellow-200 bg-yellow-50 p-4 text-sm text-yellow-700">
-                              No selected meal-day records found for this request.
-                            </div>
-                          ) : (
-                            <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-
-                              {request.days
-                                .filter(
-                                  (
-                                    day
-                                  ) =>
-                                    day.included
-                                )
-                                .map(
-                                  (
-                                    day
-                                  ) => (
-                                    <div
-                                      key={
-                                        day.id
-                                      }
-                                      className="rounded-xl border border-gray-200 bg-white p-4"
-                                    >
-
-                                      <p className="font-semibold text-gray-900">
-                                        {formatLongDate(
-                                          day.meal_date
-                                        )}
-                                      </p>
-
-                                      <p className="mt-2 text-sm font-semibold">
-
-                                        {day.meal_type ===
-                                        "lunch" ? (
-                                          <span className="text-green-700">
-                                            🍱 Lunch
-                                          </span>
-                                        ) : (
-                                          <span className="text-green-700">
-                                            🌙 Dinner
-                                          </span>
-                                        )}
-
-                                      </p>
-
-                                      <p className="mt-1 text-xs text-gray-500">
-                                        Guest meals:{" "}
-                                        {Number(
-                                          request.quantity ||
-                                            0
-                                        )}
-                                      </p>
-
-                                    </div>
-                                  )
-                                )}
-
-                            </div>
-                          )}
+                          <span className="rounded-full bg-gray-100 px-3 py-1 text-xs font-semibold text-gray-600">
+                            {selectedMealSlots} meal slot
+                            {selectedMealSlots !== 1
+                              ? "s"
+                              : ""}
+                          </span>
 
                         </div>
 
-                        {/* APPROVAL INFO */}
+                        {includedDays.length === 0 ? (
+                          <div className="mt-3 rounded-xl border border-yellow-200 bg-yellow-50 p-4 text-sm text-yellow-700">
+                            No selected meal-day records found for this request.
+                          </div>
+                        ) : (
+                          <div className="mt-4 overflow-hidden rounded-xl border border-gray-200">
 
-                        {request.approved_at && (
-                          <p className="mt-5 text-xs text-gray-400">
-                            Approved on{" "}
-                            {formatDateTime(
-                              request.approved_at
-                            )}
-                          </p>
+                            <div className="hidden grid-cols-4 gap-4 border-b border-gray-200 bg-gray-50 px-4 py-3 text-xs font-bold uppercase tracking-wide text-gray-500 sm:grid">
+
+                              <div>
+                                Date
+                              </div>
+
+                              <div>
+                                Meal
+                              </div>
+
+                              <div>
+                                Guest Quantity
+                              </div>
+
+                              <div>
+                                Total Meals
+                              </div>
+
+                            </div>
+
+                            <div className="divide-y divide-gray-200">
+
+                              {includedDays.map((day) => (
+
+                                <div
+                                  key={day.id}
+                                  className="grid gap-2 px-4 py-4 sm:grid-cols-4 sm:items-center sm:gap-4"
+                                >
+
+                                  <div>
+
+                                    <p className="text-sm font-bold text-gray-900">
+                                      {formatLongDate(
+                                        day.meal_date
+                                      )}
+                                    </p>
+
+                                    <p className="mt-1 text-xs text-gray-400">
+                                      {day.meal_date}
+                                    </p>
+
+                                  </div>
+
+                                  <div>
+
+                                    {day.meal_type ===
+                                    "lunch" ? (
+                                      <span className="inline-flex rounded-full bg-green-100 px-3 py-1 text-xs font-bold text-green-700">
+                                        🍱 Lunch
+                                      </span>
+                                    ) : (
+                                      <span className="inline-flex rounded-full bg-blue-100 px-3 py-1 text-xs font-bold text-blue-700">
+                                        🌙 Dinner
+                                      </span>
+                                    )}
+
+                                  </div>
+
+                                  <div>
+
+                                    <span className="text-sm font-semibold text-gray-700">
+                                      {quantity} guest
+                                      {quantity !== 1
+                                        ? "s"
+                                        : ""}
+                                    </span>
+
+                                  </div>
+
+                                  <div>
+
+                                    <span className="text-sm font-bold text-green-700">
+                                      {quantity} meal
+                                      {quantity !== 1
+                                        ? "s"
+                                        : ""}
+                                    </span>
+
+                                  </div>
+
+                                </div>
+
+                              ))}
+
+                            </div>
+
+                          </div>
                         )}
-
-                        {/* ACTIONS */}
-
-                        <div className="mt-6 flex flex-col gap-3 border-t border-gray-200 pt-5 sm:flex-row sm:justify-end">
-
-                          {/* APPROVE */}
-
-                          {request.status !==
-                            "approved" && (
-                            <button
-                              type="button"
-                              onClick={() =>
-                                updateRequestStatus(
-                                  request.id,
-                                  "approved"
-                                )
-                              }
-                              disabled={
-                                processingId !==
-                                null
-                              }
-                              className="rounded-xl bg-green-600 px-5 py-3 font-semibold text-white hover:bg-green-700 disabled:cursor-not-allowed disabled:opacity-50"
-                            >
-                              {isProcessing
-                                ? "Processing..."
-                                : "✓ Approve"}
-                            </button>
-                          )}
-
-                          {/* REJECT */}
-
-                          {request.status !==
-                            "rejected" && (
-                            <button
-                              type="button"
-                              onClick={() =>
-                                updateRequestStatus(
-                                  request.id,
-                                  "rejected"
-                                )
-                              }
-                              disabled={
-                                processingId !==
-                                null
-                              }
-                              className="rounded-xl bg-red-600 px-5 py-3 font-semibold text-white hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-50"
-                            >
-                              {isProcessing
-                                ? "Processing..."
-                                : "✕ Reject"}
-                            </button>
-                          )}
-
-                        </div>
 
                       </div>
 
-                    </article>
-                  );
-                }
-              )}
+                      {/* APPROVAL INFO */}
+
+                      {request.approved_at && (
+                        <p className="mt-5 text-xs text-gray-400">
+                          Approved on{" "}
+                          {formatDateTime(
+                            request.approved_at
+                          )}
+                        </p>
+                      )}
+
+                      {/* ACTIONS */}
+
+                      <div className="mt-6 flex flex-col gap-3 border-t border-gray-200 pt-5 sm:flex-row sm:justify-end">
+
+                        {request.status !==
+                          "approved" && (
+                          <button
+                            type="button"
+                            onClick={() =>
+                              updateRequestStatus(
+                                request.id,
+                                "approved"
+                              )
+                            }
+                            disabled={
+                              processingId !== null
+                            }
+                            className="rounded-xl bg-green-600 px-5 py-3 font-semibold text-white hover:bg-green-700 disabled:cursor-not-allowed disabled:opacity-50"
+                          >
+                            {isProcessing
+                              ? "Processing..."
+                              : "✓ Approve"}
+                          </button>
+                        )}
+
+                        {request.status !==
+                          "rejected" && (
+                          <button
+                            type="button"
+                            onClick={() =>
+                              updateRequestStatus(
+                                request.id,
+                                "rejected"
+                              )
+                            }
+                            disabled={
+                              processingId !== null
+                            }
+                            className="rounded-xl bg-red-600 px-5 py-3 font-semibold text-white hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-50"
+                          >
+                            {isProcessing
+                              ? "Processing..."
+                              : "✕ Reject"}
+                          </button>
+                        )}
+
+                      </div>
+
+                    </div>
+
+                  </article>
+                );
+              })}
 
             </div>
           )}
@@ -1151,7 +1164,56 @@ export default function ExtraMealRequestsPage() {
         </section>
 
       </div>
+
     </main>
+  );
+}
+
+/* ===================================================== */
+/* SUMMARY CARD */
+/* ===================================================== */
+
+function SummaryCard({
+  title,
+  count,
+  description,
+  active,
+  onClick,
+  textClass,
+  ringClass,
+}: {
+  title: string;
+  count: number;
+  description: string;
+  active: boolean;
+  onClick: () => void;
+  textClass: string;
+  ringClass: string;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`rounded-2xl bg-white p-5 text-left shadow-sm transition hover:shadow-md ${
+        active
+          ? `ring-2 ${ringClass}`
+          : ""
+      }`}
+    >
+      <p className="text-sm font-semibold text-gray-500">
+        {title}
+      </p>
+
+      <p
+        className={`mt-2 text-3xl font-bold ${textClass}`}
+      >
+        {count}
+      </p>
+
+      <p className="mt-1 text-xs text-gray-400">
+        {description}
+      </p>
+    </button>
   );
 }
 
