@@ -1,12 +1,30 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 
 type Plan = "lunch" | "dinner" | "both";
 
 export default function CustomerRequestPage() {
+  return (
+    <Suspense
+      fallback={
+        <main className="flex min-h-screen items-center justify-center bg-gray-100 px-4 py-8">
+          <div className="rounded-2xl bg-white px-8 py-6 text-center shadow-xl">
+            <p className="font-semibold text-gray-700">
+              Loading...
+            </p>
+          </div>
+        </main>
+      }
+    >
+      <CustomerRequestForm />
+    </Suspense>
+  );
+}
+
+function CustomerRequestForm() {
   const searchParams = useSearchParams();
 
   const [name, setName] = useState("");
