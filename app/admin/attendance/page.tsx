@@ -10,6 +10,7 @@ type Customer = {
   lunch_rate: number;
   dinner_rate: number;
   active: boolean;
+  start_date: string | null;
 };
 
 type AttendanceRecord = {
@@ -39,7 +40,9 @@ export default function AttendancePage() {
 
     const { data: customerData, error: customerError } = await supabase
       .from("customers")
-      .select("id, name, phone, lunch_rate, dinner_rate, active")
+      .select(
+        "id, name, phone, lunch_rate, dinner_rate, active, start_date"
+      )
       .eq("active", true)
       .order("name");
 
@@ -50,8 +53,24 @@ export default function AttendancePage() {
       return;
     }
 
-    setCustomers(customerData || []);
+    // ---------------------------------------
+    // FILTER CUSTOMERS BY START DATE
+    // ---------------------------------------
+    const filteredCustomers = (customerData || []).filter((customer) => {
+      // Agar start_date nahi hai to customer show hoga
+      if (!customer.start_date) {
+        return true;
+      }
 
+      // Customer sirf start date ya uske baad show hoga
+      return selectedDate >= customer.start_date;
+    });
+
+    setCustomers(filteredCustomers);
+
+    // ---------------------------------------
+    // LOAD ATTENDANCE FOR SELECTED DATE
+    // ---------------------------------------
     const { data: attendanceData, error: attendanceError } =
       await supabase
         .from("attendance")
@@ -240,8 +259,8 @@ export default function AttendancePage() {
           />
 
           <p className="mt-2 text-sm text-gray-500">
-            Purani date select karke bhi Present / Absent
-            attendance change kar sakte hain.
+            Customer ki attendance uski start date se pehle
+            available nahi hogi.
           </p>
         </div>
 
@@ -254,7 +273,7 @@ export default function AttendancePage() {
             </div>
           ) : customers.length === 0 ? (
             <div className="p-6 text-gray-500">
-              No active customers found.
+              Is date ke liye koi active customer available nahi hai.
             </div>
           ) : (
             <div className="overflow-x-auto">
