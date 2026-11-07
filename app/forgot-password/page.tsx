@@ -22,7 +22,7 @@ export default function ForgotPasswordPage() {
     const { error } = await supabase.auth.resetPasswordForEmail(
       email.trim(),
       {
-        redirectTo: `${window.location.origin}/update-password`,
+        redirectTo: https://lazzat-tiffin.vercel.app/update-password,
       }
     );
 
