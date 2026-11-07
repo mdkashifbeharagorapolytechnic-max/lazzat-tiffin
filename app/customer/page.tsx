@@ -598,14 +598,16 @@ export default function CustomerDashboard() {
   function downloadMealHistoryPdf() {
     if (!customer || filteredHistory.length === 0) return;
 
-    const escapeHtml = (value: string) =>
-      value.replace(/[&<>"']/g, (character) => ({
+    const escapeHtml = (value: string) => {
+      const entities: Record<string, string> = {
         "&": "&amp;",
         "<": "&lt;",
         ">": "&gt;",
         '"': "&quot;",
         "'": "&#39;",
-      })[character] || character);
+      };
+      return value.replace(/[&<>"']/g, (character) => entities[character] || character);
+    };
 
     const lunchRate = Number(customer.lunch_rate || 0);
     const dinnerRate = Number(customer.dinner_rate || 0);
