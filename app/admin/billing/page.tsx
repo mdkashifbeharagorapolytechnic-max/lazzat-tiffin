@@ -19,6 +19,8 @@ type Attendance = {
   attendance_date: string;
   lunch: boolean;
   dinner: boolean;
+  extra_lunch_count: number;
+  extra_dinner_count: number;
 };
 
 type Billing = {
@@ -172,7 +174,7 @@ export default function AdminBillingPage() {
         supabase
           .from("attendance")
           .select(
-            "id,customer_id,attendance_date,lunch,dinner"
+            "id,customer_id,attendance_date,lunch,dinner,extra_lunch_count,extra_dinner_count"
           )
           .gte("attendance_date", monthStart)
           .lt("attendance_date", nextMonthStart),
@@ -239,6 +241,12 @@ export default function AdminBillingPage() {
       const dinnerCount = customerAttendance.filter(
         (item) => item.dinner === true
       ).length;
+      const extraLunchCount = customerAttendance.reduce(
+        (sum, item) => sum + Number(item.extra_lunch_count || 0), 0
+      );
+      const extraDinnerCount = customerAttendance.reduce(
+        (sum, item) => sum + Number(item.extra_dinner_count || 0), 0
+      );
 
       const savedBill = existingBilling.find(
         (bill) =>
@@ -262,9 +270,11 @@ export default function AdminBillingPage() {
 
       const lunchAmount = lunchCount * lunchRate;
       const dinnerAmount = dinnerCount * dinnerRate;
+      const extraLunchAmount = extraLunchCount * lunchRate;
+      const extraDinnerAmount = extraDinnerCount * dinnerRate;
 
       const totalAmount =
-        lunchAmount + dinnerAmount;
+        lunchAmount + dinnerAmount + extraLunchAmount + extraDinnerAmount;
 
       const paidAmount = Number(
         paidAmounts[customer.id] ??
@@ -286,6 +296,10 @@ export default function AdminBillingPage() {
         customer,
         lunchCount,
         dinnerCount,
+        extraLunchCount,
+        extraDinnerCount,
+        extraLunchAmount,
+        extraDinnerAmount,
         lunchRate,
         dinnerRate,
         lunchAmount,
@@ -397,6 +411,10 @@ export default function AdminBillingPage() {
               billing_month: billingMonth,
               lunch_count: row.lunchCount,
               dinner_count: row.dinnerCount,
+              extra_lunch_count: row.extraLunchCount,
+              extra_dinner_count: row.extraDinnerCount,
+              extra_lunch_amount: row.extraLunchAmount,
+              extra_dinner_amount: row.extraDinnerAmount,
               lunch_rate: row.lunchRate,
               dinner_rate: row.dinnerRate,
               lunch_amount: row.lunchAmount,
@@ -467,6 +485,10 @@ export default function AdminBillingPage() {
               billing_month: billingMonth,
               lunch_count: row.lunchCount,
               dinner_count: row.dinnerCount,
+              extra_lunch_count: row.extraLunchCount,
+              extra_dinner_count: row.extraDinnerCount,
+              extra_lunch_amount: row.extraLunchAmount,
+              extra_dinner_amount: row.extraDinnerAmount,
               lunch_rate: row.lunchRate,
               dinner_rate: row.dinnerRate,
               lunch_amount: row.lunchAmount,
