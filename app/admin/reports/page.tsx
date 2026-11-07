@@ -224,8 +224,6 @@ export default function ReportsPage() {
             "id, billing_id, amount, payment_date, payment_method, note, created_at"
           )
           .eq("customer_id", selectedCustomer)
-          .gte("payment_date", monthStart)
-          .lt("payment_date", monthEnd)
           .order("payment_date", {
             ascending: false,
           })
