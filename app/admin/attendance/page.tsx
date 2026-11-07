@@ -33,6 +33,7 @@ export default function AttendancePage() {
 
   const [loading, setLoading] = useState(true);
   const [savingId, setSavingId] = useState<string | null>(null);
+  const [guestDraft, setGuestDraft] = useState<Record<string, { lunch?: string; dinner?: string }>>({});
 
   // ---------------------------------------
   // LOAD CUSTOMERS + ATTENDANCE
@@ -181,16 +182,23 @@ export default function AttendancePage() {
       // ---------------------------------------
       // UPDATE UI IMMEDIATELY
       // ---------------------------------------
+      const savedExtraLunch = Math.max(0, Math.floor(extraLunchCount ?? getAttendance(customerId).extra_lunch_count));
+      const savedExtraDinner = Math.max(0, Math.floor(extraDinnerCount ?? getAttendance(customerId).extra_dinner_count));
       setAttendance((prev) => ({
         ...prev,
         [customerId]: {
           customer_id: customerId,
           lunch,
           dinner,
-          extra_lunch_count: Math.max(0, Math.floor(extraLunchCount ?? getAttendance(customerId).extra_lunch_count)),
-          extra_dinner_count: Math.max(0, Math.floor(extraDinnerCount ?? getAttendance(customerId).extra_dinner_count)),
+          extra_lunch_count: savedExtraLunch,
+          extra_dinner_count: savedExtraDinner,
         },
       }));
+      setGuestDraft((prev) => {
+        const next = { ...prev };
+        delete next[customerId];
+        return next;
+      });
     } catch (error) {
       console.error("ATTENDANCE SAVE ERROR:", error);
       alert("Attendance save nahi hui.");
@@ -199,8 +207,17 @@ export default function AttendancePage() {
     }
   };
 
-  const updateGuestCount = (customerId: string, meal: "lunch" | "dinner", value: string) => {
+  const updateGuestDraft = (customerId: string, meal: "lunch" | "dinner", value: string) => {
+    setGuestDraft((prev) => ({
+      ...prev,
+      [customerId]: { ...prev[customerId], [meal]: value },
+    }));
+  };
+
+  const saveGuestCount = (customerId: string, meal: "lunch" | "dinner") => {
     const record = getAttendance(customerId);
+    const value = guestDraft[customerId]?.[meal];
+    if (value === undefined) return;
     const count = Math.max(0, Math.floor(Number(value) || 0));
     saveAttendance(
       customerId,
@@ -443,8 +460,9 @@ export default function AttendancePage() {
                             type="number"
                             min="0"
                             step="1"
-                            value={record.extra_lunch_count}
-                            onChange={(event) => updateGuestCount(customer.id, "lunch", event.target.value)}
+                            value={guestDraft[customer.id]?.lunch ?? String(record.extra_lunch_count)}
+                            onChange={(event) => updateGuestDraft(customer.id, "lunch", event.target.value)}
+                            onBlur={() => saveGuestCount(customer.id, "lunch")}
                             disabled={isSaving}
                             aria-label={`Guest lunch meals for ${customer.name}`}
                             className="w-20 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-center font-semibold text-amber-800"
@@ -456,8 +474,9 @@ export default function AttendancePage() {
                             type="number"
                             min="0"
                             step="1"
-                            value={record.extra_dinner_count}
-                            onChange={(event) => updateGuestCount(customer.id, "dinner", event.target.value)}
+                            value={guestDraft[customer.id]?.dinner ?? String(record.extra_dinner_count)}
+                            onChange={(event) => updateGuestDraft(customer.id, "dinner", event.target.value)}
+                            onBlur={() => saveGuestCount(customer.id, "dinner")}
                             disabled={isSaving}
                             aria-label={`Guest dinner meals for ${customer.name}`}
                             className="w-20 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-center font-semibold text-amber-800"
