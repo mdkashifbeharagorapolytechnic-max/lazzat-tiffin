@@ -34,25 +34,13 @@ export default function AdminNotifications() {
 
       const [
         customerRequestsResult,
-        mealChangesResult,
         reviewsResult,
       ] = await Promise.all([
         /*
-         * CUSTOMER REQUESTS
+         * CUSTOMER SIGNUP REQUESTS
          */
         supabase
           .from("customer_requests")
-          .select("id", {
-            count: "exact",
-            head: true,
-          })
-          .eq("status", "pending"),
-
-        /*
-         * MEAL CANCELLATION REQUESTS
-         */
-        supabase
-          .from("meal_changes")
           .select("id", {
             count: "exact",
             head: true,
@@ -83,9 +71,6 @@ export default function AdminNotifications() {
         throw customerRequestsResult.error;
       }
 
-      if (mealChangesResult.error) {
-        throw mealChangesResult.error;
-      }
 
       if (reviewsResult.error) {
         /*
@@ -107,8 +92,6 @@ export default function AdminNotifications() {
       const customerRequestCount =
         customerRequestsResult.count || 0;
 
-      const mealChangeCount =
-        mealChangesResult.count || 0;
 
       const reviewCount =
         reviewsResult.error
@@ -138,24 +121,6 @@ export default function AdminNotifications() {
           icon: "👤",
           color:
             "border-blue-200 bg-blue-50 text-blue-700",
-        });
-      }
-
-      /*
-       * MEAL CANCELLATION REQUESTS
-       */
-
-      if (mealChangeCount > 0) {
-        newNotifications.push({
-          id: "meal-changes",
-          title: "Meal Cancellation Requests",
-          description:
-            "Customers have requested meal changes or cancellations.",
-          count: mealChangeCount,
-          href: "/admin/meal-requests",
-          icon: "🍱",
-          color:
-            "border-orange-200 bg-orange-50 text-orange-700",
         });
       }
 
