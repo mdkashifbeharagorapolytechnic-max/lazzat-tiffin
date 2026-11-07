@@ -40,8 +40,18 @@ type Billing = {
   generated_at: string | null;
 };
 
+type Payment = {
+  id: string;
+  billing_id: string | null;
+  amount: number;
+  payment_date: string;
+  payment_method: string;
+  note: string | null;
+};
+
 type BillingRow = {
   customer: Customer;
+  payments: Payment[];
   lunchCount: number;
   dinnerCount: number;
   extraLunchCount: number;
@@ -139,9 +149,11 @@ export default function AdminBillingPage() {
     []
   );
 
-  const [paidAmounts, setPaidAmounts] = useState<
-    Record<string, string>
-  >({});
+  const [paymentAmounts, setPaymentAmounts] = useState<Record<string, string>>({});
+  const [paymentDates, setPaymentDates] = useState<Record<string, string>>({});
+  const [paymentMethods, setPaymentMethods] = useState<Record<string, string>>({});
+  const [paymentNotes, setPaymentNotes] = useState<Record<string, string>>({});
+  const [payments, setPayments] = useState<Payment[]>([]);
 
   const [loading, setLoading] = useState(true);
   const [savingCustomer, setSavingCustomer] = useState<string | null>(
@@ -203,19 +215,38 @@ export default function AdminBillingPage() {
         throw billingResult.error;
       }
 
+      const bills = billingResult.data || [];
+      const billIds = bills.map((bill) => bill.id);
+      let paymentRows: Payment[] = [];
+
+      if (billIds.length > 0) {
+        const { data: paymentData, error: paymentError } = await supabase
+          .from("payments")
+          .select("id,billing_id,amount,payment_date,payment_method,note")
+          .in("billing_id", billIds)
+          .order("payment_date", { ascending: false });
+
+        if (paymentError) throw paymentError;
+        paymentRows = (paymentData || []) as Payment[];
+      }
+
       setCustomers(customersResult.data || []);
       setAttendance(attendanceResult.data || []);
-      setExistingBilling(billingResult.data || []);
+      setExistingBilling(bills);
+      setPayments(paymentRows);
 
-      const initialPaid: Record<string, string> = {};
-
-      (billingResult.data || []).forEach((bill) => {
-        initialPaid[bill.customer_id] = String(
-          Number(bill.paid_amount || 0)
-        );
+      const today = new Date();
+      const todayString = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
+      const dates: Record<string, string> = {};
+      const methods: Record<string, string> = {};
+      (customersResult.data || []).forEach((customer) => {
+        dates[customer.id] = todayString;
+        methods[customer.id] = "cash";
       });
-
-      setPaidAmounts(initialPaid);
+      setPaymentDates(dates);
+      setPaymentMethods(methods);
+      setPaymentAmounts({});
+      setPaymentNotes({});
     } catch (err: any) {
       console.error("Billing load error:", err);
 
@@ -280,11 +311,12 @@ export default function AdminBillingPage() {
       const totalAmount =
         lunchAmount + dinnerAmount + extraLunchAmount + extraDinnerAmount;
 
-      const paidAmount = Number(
-        paidAmounts[customer.id] ??
-          savedBill?.paid_amount ??
-          0
+      const customerPayments = payments.filter(
+        (payment) => payment.billing_id === savedBill?.id
       );
+      const paidAmount = customerPayments.length > 0
+        ? customerPayments.reduce((sum, payment) => sum + Number(payment.amount || 0), 0)
+        : Number(savedBill?.paid_amount || 0);
 
       const dueAmount = Math.max(
         totalAmount - paidAmount,
@@ -298,6 +330,7 @@ export default function AdminBillingPage() {
 
       return {
         customer,
+        payments: customerPayments,
         lunchCount,
         dinnerCount,
         extraLunchCount,
@@ -319,7 +352,7 @@ export default function AdminBillingPage() {
     customers,
     attendance,
     existingBilling,
-    paidAmounts,
+    payments,
   ]);
 
   const summary = useMemo(() => {
@@ -339,114 +372,65 @@ export default function AdminBillingPage() {
     );
   }, [billingRows]);
 
-  function updatePaidAmount(
-    customerId: string,
-    value: string
-  ) {
-    if (value === "") {
-      setPaidAmounts((prev) => ({
-        ...prev,
-        [customerId]: "",
-      }));
-
-      return;
-    }
-
-    const numericValue = value.replace(
-      /[^0-9.]/g,
-      ""
-    );
-
-    setPaidAmounts((prev) => ({
-      ...prev,
-      [customerId]: numericValue,
-    }));
-  }
-
   async function savePayment(row: BillingRow) {
     try {
       setSavingCustomer(row.customer.id);
       setError("");
       setSuccess("");
 
-      const paidAmount = Math.max(
-        Number(paidAmounts[row.customer.id] || 0),
-        0
-      );
-
-      const dueAmount = Math.max(
-        row.totalAmount - paidAmount,
-        0
-      );
-
-      const paymentStatus = getStatus(
-        row.totalAmount,
-        paidAmount
-      );
-
-      const billingMonth =
-        getBillingMonthDate(selectedMonth);
-
-      const existing = existingBilling.find(
-        (bill) =>
-          bill.customer_id === row.customer.id
-      );
-
-      if (existing) {
-        const { error: updateError } =
-          await supabase
-            .from("billing")
-            .update({
-              paid_amount: paidAmount,
-              due_amount: dueAmount,
-              payment_status: paymentStatus,
-            })
-            .eq("id", existing.id);
-
-        if (updateError) {
-          throw updateError;
-        }
-      } else {
-        const { error: insertError } =
-          await supabase
-            .from("billing")
-            .insert({
-              customer_id: row.customer.id,
-              billing_month: billingMonth,
-              lunch_count: row.lunchCount,
-              dinner_count: row.dinnerCount,
-              extra_lunch_count: row.extraLunchCount,
-              extra_dinner_count: row.extraDinnerCount,
-              extra_lunch_amount: row.extraLunchAmount,
-              extra_dinner_amount: row.extraDinnerAmount,
-              lunch_rate: row.lunchRate,
-              dinner_rate: row.dinnerRate,
-              lunch_amount: row.lunchAmount,
-              dinner_amount: row.dinnerAmount,
-              total_amount: row.totalAmount,
-              paid_amount: paidAmount,
-              due_amount: dueAmount,
-              payment_status: paymentStatus,
-              generated_at: new Date().toISOString(),
-            });
-
-        if (insertError) {
-          throw insertError;
-        }
+      const amount = Number(paymentAmounts[row.customer.id] || 0);
+      if (!Number.isFinite(amount) || amount <= 0) {
+        throw new Error("Payment amount sahi se enter karein.");
+      }
+      if (amount > row.dueAmount) {
+        throw new Error(`Payment due amount ${formatCurrency(row.dueAmount)} se zyada nahi ho sakta.`);
       }
 
-      setSuccess(
-        `Payment saved for ${row.customer.name}.`
-      );
+      let billingId = row.billingId;
+      if (!billingId) {
+        const { data: createdBill, error: createError } = await supabase
+          .from("billing")
+          .insert({
+            customer_id: row.customer.id,
+            billing_month: getBillingMonthDate(selectedMonth),
+            lunch_count: row.lunchCount,
+            dinner_count: row.dinnerCount,
+            extra_lunch_count: row.extraLunchCount,
+            extra_dinner_count: row.extraDinnerCount,
+            extra_lunch_amount: row.extraLunchAmount,
+            extra_dinner_amount: row.extraDinnerAmount,
+            lunch_rate: row.lunchRate,
+            dinner_rate: row.dinnerRate,
+            lunch_amount: row.lunchAmount,
+            dinner_amount: row.dinnerAmount,
+            total_amount: row.totalAmount,
+            paid_amount: 0,
+            due_amount: row.totalAmount,
+            payment_status: getStatus(row.totalAmount, 0),
+            generated_at: new Date().toISOString(),
+          })
+          .select("id")
+          .single();
+        if (createError) throw createError;
+        billingId = createdBill.id;
+      }
 
+      const { error: paymentError } = await supabase.rpc("record_admin_payment", {
+        p_billing_id: billingId,
+        p_amount: amount,
+        p_payment_date: paymentDates[row.customer.id],
+        p_payment_method: paymentMethods[row.customer.id] || "cash",
+        p_note: paymentNotes[row.customer.id] || null,
+      });
+      if (paymentError) throw paymentError;
+
+      setPaymentAmounts((current) => ({ ...current, [row.customer.id]: "" }));
+      setPaymentNotes((current) => ({ ...current, [row.customer.id]: "" }));
+      setSuccess(`${formatCurrency(amount)} payment ${row.customer.name} ke bill mein add ho gaya.`);
       await loadBillingData();
     } catch (err: any) {
-      console.error("Save payment error:", err);
-
-      setError(
-        err?.message ||
-          "Payment save nahi ho paya."
-      );
+      console.error("Record billing payment error:", err);
+      setError(err?.message || "Payment save nahi ho paya.");
     } finally {
       setSavingCustomer(null);
     }
@@ -461,10 +445,7 @@ export default function AdminBillingPage() {
       const billingMonth =
         getBillingMonthDate(selectedMonth);
 
-      const paidAmount = Math.max(
-        Number(paidAmounts[row.customer.id] || 0),
-        0
-      );
+      const paidAmount = row.paidAmount;
 
       const dueAmount = Math.max(
         row.totalAmount - paidAmount,
@@ -729,7 +710,7 @@ export default function AdminBillingPage() {
                     </th>
 
                     <th className="px-4 py-4 text-center font-semibold">
-                      Action
+                      Payment / Action
                     </th>
                   </tr>
                 </thead>
@@ -795,23 +776,8 @@ export default function AdminBillingPage() {
                       </td>
 
                       {/* Paid */}
-                      <td className="px-4 py-5">
-                        <input
-                          type="text"
-                          inputMode="decimal"
-                          value={
-                            paidAmounts[row.customer.id] ??
-                            ""
-                          }
-                          onChange={(event) =>
-                            updatePaidAmount(
-                              row.customer.id,
-                              event.target.value
-                            )
-                          }
-                          className="w-28 rounded-lg border border-slate-300 bg-white px-3 py-2 text-right text-slate-900 outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100"
-                          placeholder="0"
-                        />
+                      <td className="px-4 py-5 text-right font-semibold text-emerald-700">
+                        {formatCurrency(row.paidAmount)}
                       </td>
 
                       {/* Due */}
@@ -828,7 +794,41 @@ export default function AdminBillingPage() {
 
                       {/* Action */}
                       <td className="px-4 py-5">
-                        <div className="flex min-w-[130px] flex-col gap-2">
+                        <div className="flex min-w-[230px] flex-col gap-2">
+                          <input
+                            type="number"
+                            min="0.01"
+                            max={row.dueAmount}
+                            step="0.01"
+                            value={paymentAmounts[row.customer.id] || ""}
+                            onChange={(event) => setPaymentAmounts((current) => ({ ...current, [row.customer.id]: event.target.value }))}
+                            placeholder="Payment amount"
+                            className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+                          />
+                          <input
+                            type="date"
+                            value={paymentDates[row.customer.id] || ""}
+                            onChange={(event) => setPaymentDates((current) => ({ ...current, [row.customer.id]: event.target.value }))}
+                            className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+                          />
+                          <select
+                            value={paymentMethods[row.customer.id] || "cash"}
+                            onChange={(event) => setPaymentMethods((current) => ({ ...current, [row.customer.id]: event.target.value }))}
+                            className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+                          >
+                            <option value="cash">Cash</option>
+                            <option value="upi">UPI</option>
+                            <option value="bank_transfer">Bank Transfer</option>
+                            <option value="card">Card</option>
+                            <option value="other">Other</option>
+                          </select>
+                          <input
+                            type="text"
+                            value={paymentNotes[row.customer.id] || ""}
+                            onChange={(event) => setPaymentNotes((current) => ({ ...current, [row.customer.id]: event.target.value }))}
+                            placeholder="Note (optional)"
+                            className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+                          />
                           <button
                             type="button"
                             onClick={() =>
@@ -845,9 +845,17 @@ export default function AdminBillingPage() {
                             {savingCustomer ===
                             row.customer.id
                               ? "Saving..."
-                              : "Save"}
+                              : "Add Payment"}
                           </button>
 
+                          <div className="max-h-24 overflow-y-auto rounded-md bg-slate-50 p-2 text-xs text-slate-600">
+                            <p className="mb-1 font-semibold">Payment History</p>
+                            {row.payments.length > 0 ? row.payments.map((payment) => (
+                              <p key={payment.id}>
+                                {payment.payment_date.split("-").reverse().join("/")} — {formatCurrency(Number(payment.amount))}
+                              </p>
+                            )) : <p>No payments recorded</p>}
+                          </div>
                           <button
                             type="button"
                             onClick={() =>
