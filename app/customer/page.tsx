@@ -37,16 +37,6 @@ type Attendance = {
   dinner_source: "customer" | "admin";
 };
 
-type MealChange = {
-  id: string;
-  change_date: string;
-  meal: "lunch" | "dinner";
-  action: "cancel" | "restore";
-  reason: string | null;
-  status: "pending" | "approved" | "rejected";
-  created_at: string;
-};
-
 type Billing = {
   id: string;
   customer_id: string;
@@ -131,26 +121,6 @@ function formatLongDate(value: string) {
   });
 }
 
-function getCurrentTimeInMinutes() {
-  const date = new Date();
-
-  return date.getHours() * 60 + date.getMinutes();
-}
-
-function isBeforeCutoff(meal: "lunch" | "dinner") {
-  const now = getCurrentTimeInMinutes();
-
-  if (meal === "lunch") {
-    return now < 11 * 60;
-  }
-
-  return now < 19 * 60;
-}
-
-function getCutoffText(meal: "lunch" | "dinner") {
-  return meal === "lunch" ? "11:00 AM" : "7:00 PM";
-}
-
 function getDatesBetween(
   startDate: string,
   endDate: string
@@ -222,8 +192,6 @@ export default function CustomerDashboard() {
   const [attendanceHistory, setAttendanceHistory] =
     useState<Attendance[]>([]);
 
-  const [mealChanges, setMealChanges] =
-    useState<MealChange[]>([]);
 
   const [billing, setBilling] =
     useState<Billing | null>(null);
@@ -264,11 +232,6 @@ export default function CustomerDashboard() {
   const [dinnerComment, setDinnerComment] =
     useState("");
 
-  const [cancelReason, setCancelReason] =
-    useState<Record<string, string>>({
-      lunch: "",
-      dinner: "",
-    });
 
   /* ================================================= */
   /* HISTORY FILTER */
@@ -530,40 +493,6 @@ export default function CustomerDashboard() {
           []) as Attendance[]
       );
 
-      /* ================================================= */
-      /* MEAL CHANGES - TODAY */
-      /* ================================================= */
-
-      const {
-        data: changesData,
-        error: changesError,
-      } = await supabase
-        .from("meal_changes")
-        .select(
-          "id,change_date,meal,action,reason,status,created_at"
-        )
-        .eq(
-          "customer_id",
-          customerData.id
-        )
-        .eq(
-          "change_date",
-          today
-        )
-        .order(
-          "created_at",
-          {
-            ascending: false,
-          }
-        );
-
-      if (changesError) {
-        throw changesError;
-      }
-
-      setMealChanges(
-        (changesData || []) as MealChange[]
-      );
 
       /* ================================================= */
       /* CUSTOMER WALLET */
@@ -1115,129 +1044,6 @@ export default function CustomerDashboard() {
   }
 
   /* ================================================= */
-  /* REQUEST CANCELLATION */
-  /* ================================================= */
-
-  async function requestCancellation(
-    meal: "lunch" | "dinner"
-  ) {
-    if (!customer || saving) return;
-
-    if (!isBeforeCutoff(meal)) {
-      setError(
-        `${
-          meal === "lunch"
-            ? "Lunch"
-            : "Dinner"
-        } cancellation is closed after ${getCutoffText(
-          meal
-        )}.`
-      );
-
-      return;
-    }
-
-    const existingPending =
-      mealChanges.find(
-        (item) =>
-          item.meal === meal &&
-          item.action ===
-            "cancel" &&
-          item.status ===
-            "pending"
-      );
-
-    if (existingPending) {
-      setMessage(
-        `${
-          meal === "lunch"
-            ? "Lunch"
-            : "Dinner"
-        } cancellation request is already pending.`
-      );
-
-      return;
-    }
-
-    setSaving(true);
-    setAction(
-      `cancel-${meal}`
-    );
-    setError("");
-    setMessage("");
-
-    try {
-      const {
-        error: insertError,
-      } = await supabase
-        .from("meal_changes")
-        .insert({
-          customer_id:
-            customer.id,
-
-          change_date:
-            today,
-
-          meal,
-
-          action: "cancel",
-
-          reason:
-            cancelReason[
-              meal
-            ]?.trim() || null,
-
-          status: "pending",
-        });
-
-      if (insertError) {
-        throw insertError;
-      }
-
-      setMessage(
-        `${
-          meal === "lunch"
-            ? "Lunch"
-            : "Dinner"
-        } cancellation request sent to admin.`
-      );
-
-      setCancelReason(
-        (current) => ({
-          ...current,
-          [meal]: "",
-        })
-      );
-
-      await loadCustomerDashboard();
-    } catch (err) {
-      console.error(err);
-
-      setError(
-        err instanceof Error
-          ? err.message
-          : "Unable to send cancellation request."
-      );
-    } finally {
-      setSaving(false);
-      setAction("");
-    }
-  }
-
-  function hasPendingCancellation(
-    meal: "lunch" | "dinner"
-  ) {
-    return mealChanges.some(
-      (item) =>
-        item.meal === meal &&
-        item.action ===
-          "cancel" &&
-        item.status ===
-          "pending"
-    );
-  }
-
-  /* ================================================= */
   /* LOADING */
   /* ================================================= */
 
@@ -1545,37 +1351,6 @@ export default function CustomerDashboard() {
                   "lunch"
                 )
               }
-              onCancel={() =>
-                requestCancellation(
-                  "lunch"
-                )
-              }
-              cancelReason={
-                cancelReason.lunch
-              }
-              onCancelReasonChange={(
-                value
-              ) =>
-                setCancelReason(
-                  (current) => ({
-                    ...current,
-                    lunch: value,
-                  })
-                )
-              }
-              cancellationPending={hasPendingCancellation(
-                "lunch"
-              )}
-              canCancel={
-                isBeforeCutoff(
-                  "lunch"
-                )
-              }
-              cutoff={
-                getCutoffText(
-                  "lunch"
-                )
-              }
               action={
                 action
               }
@@ -1620,37 +1395,6 @@ export default function CustomerDashboard() {
               }
               onSaveFeedback={() =>
                 saveFeedback(
-                  "dinner"
-                )
-              }
-              onCancel={() =>
-                requestCancellation(
-                  "dinner"
-                )
-              }
-              cancelReason={
-                cancelReason.dinner
-              }
-              onCancelReasonChange={(
-                value
-              ) =>
-                setCancelReason(
-                  (current) => ({
-                    ...current,
-                    dinner: value,
-                  })
-                )
-              }
-              cancellationPending={hasPendingCancellation(
-                "dinner"
-              )}
-              canCancel={
-                isBeforeCutoff(
-                  "dinner"
-                )
-              }
-              cutoff={
-                getCutoffText(
                   "dinner"
                 )
               }
@@ -2068,14 +1812,7 @@ type MealCardProps = {
   onMarkTaken: () => void;
   onMarkNotTaken: () => void;
   onSaveFeedback: () => void;
-  onCancel: () => void;
-  cancelReason: string;
-  onCancelReasonChange: (
-    value: string
-  ) => void;
-  cancellationPending: boolean;
-  canCancel: boolean;
-  cutoff: string;
+
   action: string;
   saving: boolean;
 };
@@ -2092,12 +1829,7 @@ function MealCard({
   onMarkTaken,
   onMarkNotTaken,
   onSaveFeedback,
-  onCancel,
-  cancelReason,
-  onCancelReasonChange,
-  cancellationPending,
-  canCancel,
-  cutoff,
+
   action,
   saving,
 }: MealCardProps) {
@@ -2196,62 +1928,6 @@ function MealCard({
       </div>
 
       {/* ================================================= */}
-      {/* CANCELLATION */}
-      {/* ================================================= */}
-
-      <div className="mt-5 rounded-xl bg-gray-50 p-4">
-
-        <p className="text-sm font-semibold text-gray-800">
-          Cancel {title}
-        </p>
-
-        <p className="mt-1 text-xs leading-5 text-gray-500">
-          Cancellation is allowed before{" "}
-          {cutoff}.
-        </p>
-
-        <textarea
-          value={
-            cancelReason
-          }
-          onChange={(e) =>
-            onCancelReasonChange(
-              e.target.value
-            )
-          }
-          placeholder="Reason (optional)"
-          rows={2}
-          disabled={
-            saving ||
-            !canCancel ||
-            cancellationPending
-          }
-          className="mt-3 w-full resize-none rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none focus:border-green-500 focus:ring-2 focus:ring-green-100 disabled:bg-gray-100"
-        />
-
-        <button
-          type="button"
-          onClick={onCancel}
-          disabled={
-            saving ||
-            !canCancel ||
-            cancellationPending
-          }
-          className="mt-3 w-full rounded-lg bg-red-600 px-4 py-3 text-sm font-semibold text-white hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-60"
-        >
-          {cancellationPending
-            ? "Cancellation Pending"
-            : !canCancel
-            ? `Cancellation Closed (${cutoff})`
-            : action ===
-              `cancel-${mealKey}`
-            ? "Sending..."
-            : `Request ${title} Cancellation`}
-        </button>
-
-      </div>
-
-      {/* ================================================= */}
       {/* FEEDBACK */}
       {/* ================================================= */}
 
@@ -2323,41 +1999,6 @@ function MealCard({
       </div>
 
     </div>
-  );
-}
-
-/* ===================================================== */
-/* MEAL REQUEST STATUS */
-/* ===================================================== */
-
-function StatusBadge({
-  status,
-}: {
-  status:
-    | "pending"
-    | "approved"
-    | "rejected";
-}) {
-  if (status === "approved") {
-    return (
-      <span className="rounded-full bg-green-100 px-3 py-1 text-xs font-semibold text-green-700">
-        Approved
-      </span>
-    );
-  }
-
-  if (status === "rejected") {
-    return (
-      <span className="rounded-full bg-red-100 px-3 py-1 text-xs font-semibold text-red-700">
-        Rejected
-      </span>
-    );
-  }
-
-  return (
-    <span className="rounded-full bg-yellow-100 px-3 py-1 text-xs font-semibold text-yellow-700">
-      Pending
-    </span>
   );
 }
 
