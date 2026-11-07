@@ -1216,6 +1216,104 @@ export default function CustomerDashboard() {
   }
 
   /* ================================================= */
+  /* DOWNLOAD SELECTED BILL PDF */
+  /* ================================================= */
+
+  function downloadBillingPdf() {
+    if (!customer || !billing) return;
+
+    const escapeHtml = (value: string) => {
+      const entities: Record<string, string> = {
+        "&": "&amp;",
+        "<": "&lt;",
+        ">": "&gt;",
+        '"': "&quot;",
+        "'": "&#39;",
+      };
+      return value.replace(/[&<>"']/g, (character) => entities[character] || character);
+    };
+
+    const printWindow = window.open("", "_blank", "width=900,height=750");
+    if (!printWindow) {
+      setError("Please allow pop-ups for this website, then try downloading the bill PDF again.");
+      return;
+    }
+
+    const rows = [
+      ["Lunch", billing.lunch_count, billing.lunch_rate, billing.lunch_amount],
+      ["Dinner", billing.dinner_count, billing.dinner_rate, billing.dinner_amount],
+      ["Guest Lunch", Number(billing.extra_lunch_count || 0), billing.lunch_rate, Number(billing.extra_lunch_amount || 0)],
+      ["Guest Dinner", Number(billing.extra_dinner_count || 0), billing.dinner_rate, Number(billing.extra_dinner_amount || 0)],
+    ].map(([name, count, rate, amount]) => `
+      <tr>
+        <td>${name}</td>
+        <td class="num">${count}</td>
+        <td class="num">${formatMoney(Number(rate))}</td>
+        <td class="num">${formatMoney(Number(amount))}</td>
+      </tr>`).join("");
+
+    const status = (billing.payment_status || "pending").replaceAll("_", " ");
+
+    printWindow.document.write(`
+      <!doctype html>
+      <html>
+        <head>
+          <meta charset="utf-8">
+          <title>Lazzat Tiffin - Bill - ${escapeHtml(formatMonth(billing.billing_month))}</title>
+          <style>
+            @page { size: A4; margin: 18mm; }
+            * { box-sizing: border-box; }
+            body { font-family: Arial, Helvetica, sans-serif; color: #17211b; font-size: 12px; margin: 0; }
+            header { display: flex; justify-content: space-between; border-bottom: 3px solid #16834a; padding-bottom: 14px; }
+            .brand { color: #147a43; font-size: 24px; font-weight: 800; }
+            .muted { color: #68756d; }
+            h2 { font-size: 18px; margin: 22px 0 12px; }
+            .details { background: #f3f8f4; border: 1px solid #dce9df; border-radius: 8px; padding: 14px; line-height: 1.8; }
+            table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+            th { background: #eaf3ed; color: #234b33; text-align: left; }
+            th, td { padding: 11px 9px; border-bottom: 1px solid #e4ebe6; }
+            .num { text-align: right; }
+            .totals { width: 65%; margin: 22px 0 0 auto; }
+            .totals td { padding: 8px; }
+            .grand { font-size: 16px; font-weight: 800; border-top: 2px solid #16834a; }
+            .status { margin-top: 22px; padding: 12px; background: #f3f8f4; border-radius: 8px; }
+            footer { margin-top: 35px; text-align: center; color: #7b857e; font-size: 10px; border-top: 1px solid #e4ebe6; padding-top: 12px; }
+            @media print { body { -webkit-print-color-adjust: exact; print-color-adjust: exact; } }
+          </style>
+        </head>
+        <body>
+          <header>
+            <div><div class="brand">LAZZAT TIFFIN</div><div class="muted">Monthly Meal Bill</div></div>
+            <div style="text-align:right"><strong>INVOICE</strong><br><span class="muted">${escapeHtml(formatMonth(billing.billing_month))}</span></div>
+          </header>
+          <h2>Customer Details</h2>
+          <div class="details">
+            <strong>${escapeHtml(customer.name)}</strong><br>
+            Phone: ${escapeHtml(customer.phone || "-")}<br>
+            Address: ${escapeHtml(customer.address || "-")}
+          </div>
+          <table>
+            <thead><tr><th>Meal</th><th class="num">Count</th><th class="num">Rate</th><th class="num">Amount</th></tr></thead>
+            <tbody>${rows}</tbody>
+          </table>
+          <table class="totals">
+            <tr><td>Total Bill</td><td class="num">${formatMoney(billing.total_amount)}</td></tr>
+            <tr><td>Paid Amount</td><td class="num">${formatMoney(billing.paid_amount)}</td></tr>
+            <tr><td>Due Amount</td><td class="num">${formatMoney(billing.due_amount)}</td></tr>
+            <tr class="grand"><td>Payment Status</td><td class="num">${escapeHtml(status.toUpperCase())}</td></tr>
+          </table>
+          <div class="status">Bill Month: <strong>${escapeHtml(formatMonth(billing.billing_month))}</strong>
+            ${billing.generated_at ? `&nbsp; | &nbsp; Generated: ${new Date(billing.generated_at).toLocaleDateString("en-IN")}` : ""}
+          </div>
+          <footer>Thank you for choosing Lazzat Tiffin.</footer>
+          <script>window.onload = () => window.print();</script>
+        </body>
+      </html>
+    `);
+    printWindow.document.close();
+  }
+
+  /* ================================================= */
   /* LOADING */
   /* ================================================= */
 
@@ -1463,16 +1561,16 @@ export default function CustomerDashboard() {
         </section>
 
         {/* ================================================= */}
-        {/* MEAL HISTORY */}
+        {/* MEAL HISTORY - PDF ONLY */}
         {/* ================================================= */}
 
         <section className="mt-6 rounded-2xl bg-white p-6 shadow-sm">
-          <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
             <div>
               <p className="text-sm font-semibold text-green-600">MEAL RECORD</p>
               <h2 className="mt-1 text-2xl font-bold text-gray-900">Meal History</h2>
               <p className="mt-1 text-sm text-gray-500">
-                Month select karein ya custom date range select karke apna meal record dekhein.
+                Select month or date range and download your meal history as PDF.
               </p>
             </div>
             <button
@@ -1482,16 +1580,13 @@ export default function CustomerDashboard() {
               className="inline-flex shrink-0 items-center justify-center gap-2 rounded-xl bg-green-700 px-5 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-green-800 disabled:cursor-not-allowed disabled:opacity-50"
             >
               <span aria-hidden="true">↓</span>
-              Download PDF
+              Download Meal History PDF
             </button>
           </div>
 
-          <div className="mt-6 rounded-2xl border border-gray-200 bg-gray-50 p-5">
+          <div className="mt-5 rounded-2xl border border-gray-200 bg-gray-50 p-5">
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-              <div>
-                <p className="text-sm font-semibold text-gray-800">Filter Attendance</p>
-                <p className="mt-1 text-xs text-gray-500">Month-wise ya custom date range choose karein.</p>
-              </div>
+              <p className="text-sm font-semibold text-gray-800">Choose PDF period</p>
               <div className="flex rounded-xl border border-gray-200 bg-white p-1">
                 <button type="button" onClick={() => setHistoryFilterMode("month")} className={`rounded-lg px-4 py-2 text-sm font-semibold ${historyFilterMode === "month" ? "bg-green-600 text-white" : "text-gray-600 hover:bg-gray-100"}`}>Month</button>
                 <button type="button" onClick={() => setHistoryFilterMode("custom")} className={`rounded-lg px-4 py-2 text-sm font-semibold ${historyFilterMode === "custom" ? "bg-green-600 text-white" : "text-gray-600 hover:bg-gray-100"}`}>Date Range</button>
@@ -1499,18 +1594,12 @@ export default function CustomerDashboard() {
             </div>
 
             {historyFilterMode === "month" ? (
-              <div className="mt-5 grid gap-4 md:grid-cols-2">
-                <div>
-                  <label className="text-sm font-semibold text-gray-700">Select Month</label>
-                  <input type="month" value={historyMonth} onChange={(e) => setHistoryMonth(e.target.value)} className="mt-2 w-full rounded-xl border border-gray-300 bg-white px-4 py-3 text-sm" />
-                </div>
-                <div className="rounded-xl bg-white p-4">
-                  <p className="text-xs text-gray-500">Showing</p>
-                  <p className="mt-1 font-semibold text-gray-900">{formatDate(historyRange.start)} → {formatDate(historyRange.end)}</p>
-                </div>
+              <div className="mt-4">
+                <label className="text-sm font-semibold text-gray-700">Select Month</label>
+                <input type="month" value={historyMonth} onChange={(e) => setHistoryMonth(e.target.value)} className="mt-2 w-full rounded-xl border border-gray-300 bg-white px-4 py-3 text-sm sm:max-w-xs" />
               </div>
             ) : (
-              <div className="mt-5 grid gap-4 md:grid-cols-2">
+              <div className="mt-4 grid gap-4 sm:grid-cols-2">
                 <div>
                   <label className="text-sm font-semibold text-gray-700">From Date</label>
                   <input type="date" value={historyStartDate} onChange={(e) => setHistoryStartDate(e.target.value)} className="mt-2 w-full rounded-xl border border-gray-300 bg-white px-4 py-3 text-sm" />
@@ -1521,53 +1610,12 @@ export default function CustomerDashboard() {
                 </div>
               </div>
             )}
-          </div>
-
-          <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            <HistorySummaryCard title="Lunch" value={historySummary.lunchCount} icon="🍱" />
-            <HistorySummaryCard title="Dinner" value={historySummary.dinnerCount} icon="🌙" />
-            <HistorySummaryCard title="Guest Meals" value={historySummary.extraLunchCount + historySummary.extraDinnerCount} icon="👥" guest />
-          </div>
-
-          {filteredHistory.length === 0 ? (
-            <div className="mt-6 rounded-2xl bg-gray-50 p-8 text-center">
-              <div className="text-4xl">📅</div>
-              <p className="mt-3 font-semibold text-gray-800">No meal history found</p>
-              <p className="mt-1 text-sm text-gray-500">Is date range mein attendance record available nahi hai.</p>
-            </div>
-          ) : (
-            <div className="mt-6 overflow-hidden rounded-2xl border border-gray-200">
-              <div className="hidden grid-cols-4 bg-gray-50 px-5 py-4 text-sm font-semibold text-gray-600 md:grid">
-                <span>Date</span><span className="text-center">🍱 Lunch</span><span className="text-center">🌙 Dinner</span><span className="text-center">👥 Guest / Extra</span>
-              </div>
-              <div className="divide-y divide-gray-200">
-                {filteredHistory.map((row) => (
-                  <div key={row.date} className="grid grid-cols-1 gap-4 bg-white px-5 py-5 md:grid-cols-4 md:items-center">
-                    <p className="font-semibold text-gray-900">{formatLongDate(row.date)}</p>
-                    <div className="text-left md:text-center">
-                      <p className="mb-1 text-xs text-gray-400 md:hidden">Lunch</p>
-                      <span className={`inline-block rounded-full px-3 py-1 text-xs font-semibold ${row.attendance?.lunch ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-500"}`}>{row.attendance?.lunch ? "✓ Taken" : "Not Taken"}</span>
-                    </div>
-                    <div className="text-left md:text-center">
-                      <p className="mb-1 text-xs text-gray-400 md:hidden">Guest / Extra Meals</p>
-                      <span className="inline-block rounded-full bg-amber-50 px-3 py-1 text-xs font-semibold text-amber-800">Lunch: {Number(row.attendance?.extra_lunch_count || 0)} · Dinner: {Number(row.attendance?.extra_dinner_count || 0)}</span>
-                    </div>
-                    <div className="text-left md:text-center">
-                      <p className="mb-1 text-xs text-gray-400 md:hidden">Dinner</p>
-                      <span className={`inline-block rounded-full px-3 py-1 text-xs font-semibold ${row.attendance?.dinner ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-500"}`}>{row.attendance?.dinner ? "✓ Taken" : "Not Taken"}</span>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          <div className="mt-4 text-xs text-gray-500">
-            Showing {formatDate(historyRange.start)} to {formatDate(historyRange.end)}
+            <p className="mt-3 text-xs text-gray-500">
+              PDF period: {formatDate(historyRange.start)} to {formatDate(historyRange.end)}
+            </p>
           </div>
         </section>
 
-        {/* ================================================= */}
         {/* BILLING */}
         {/* ================================================= */}
 
@@ -1776,11 +1824,18 @@ export default function CustomerDashboard() {
                   </p>
                 </div>
 
-                <BillingStatus
-                  status={
-                    billing.payment_status
-                  }
-                />
+                <div className="flex flex-col items-start gap-3 sm:flex-row sm:items-center">
+                  <BillingStatus
+                    status={billing.payment_status}
+                  />
+                  <button
+                    type="button"
+                    onClick={downloadBillingPdf}
+                    className="inline-flex items-center justify-center gap-2 rounded-xl bg-green-700 px-5 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-green-800"
+                  >
+                    ↓ Download Bill PDF
+                  </button>
+                </div>
 
               </div>
 
