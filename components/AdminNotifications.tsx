@@ -36,6 +36,16 @@ export default function AdminNotifications() {
         customerRequestsResult,
         reviewsResult,
       ] = await Promise.all([
+        /*
+         * CUSTOMER SIGNUP REQUESTS
+         */
+        supabase
+          .from("customer_requests")
+          .select("id", {
+            count: "exact",
+            head: true,
+          })
+          .eq("status", "pending"),
 
         /*
          * CUSTOMER REVIEWS
