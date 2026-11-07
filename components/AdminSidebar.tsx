@@ -36,11 +36,7 @@ const menuItems = [
     href: "/admin/menu",
     icon: "🍽️",
   },
-  {
-    name: "Meal Requests",
-    href: "/admin/meal-requests",
-    icon: "🍱",
-  },
+
   {
     name: "Reviews",
     href: "/admin/reviews",
