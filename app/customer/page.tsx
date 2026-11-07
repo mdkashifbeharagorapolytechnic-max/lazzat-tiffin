@@ -60,6 +60,16 @@ type Billing = {
   generated_at: string;
 };
 
+type Payment = {
+  id: string;
+  customer_id: string;
+  amount: number;
+  payment_date: string;
+  payment_method: string;
+  note: string | null;
+  created_at: string;
+};
+
 type HistoryRow = {
   date: string;
   attendance: Attendance | null;
@@ -204,6 +214,10 @@ export default function CustomerDashboard() {
 
   const [billingHistory, setBillingHistory] =
     useState<Billing[]>([]);
+
+  const [paymentHistory, setPaymentHistory] =
+    useState<Payment[]>([]);
+
 
   const [selectedBillingMonth, setSelectedBillingMonth] =
     useState(() => getCurrentMonth());
@@ -536,6 +550,27 @@ export default function CustomerDashboard() {
               0
           )
         );
+      }
+
+      /* ================================================= */
+      /* ALL PAYMENT HISTORY */
+      /* ================================================= */
+
+      const {
+        data: paymentData,
+        error: paymentError,
+      } = await supabase
+        .from("payments")
+        .select("id,customer_id,amount,payment_date,payment_method,note,created_at")
+        .eq("customer_id", customerData.id)
+        .order("payment_date", { ascending: false })
+        .order("created_at", { ascending: false });
+
+      if (paymentError) {
+        console.error("Payment history error:", paymentError);
+        setPaymentHistory([]);
+      } else {
+        setPaymentHistory((paymentData || []) as Payment[]);
       }
 
       /* ================================================= */
@@ -1776,6 +1811,68 @@ export default function CustomerDashboard() {
             </div>
           )}
 
+        </section>
+
+        {/* ================================================= */}
+        {/* ALL PAYMENT HISTORY */}
+        {/* ================================================= */}
+
+        <section className="mt-6 rounded-2xl bg-white p-6 shadow-sm">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+            <div>
+              <p className="text-sm font-medium text-green-700">Payment Records</p>
+              <h2 className="mt-1 text-2xl font-bold text-gray-900">All Payment History</h2>
+              <p className="mt-1 text-sm text-gray-500">
+                Your complete payment history, sorted by payment date.
+              </p>
+            </div>
+            <div className="rounded-xl bg-green-50 px-4 py-3">
+              <p className="text-xs font-medium text-green-700">Total Paid</p>
+              <p className="mt-1 text-xl font-bold text-green-800">
+                {formatMoney(paymentHistory.reduce((sum, payment) => sum + Number(payment.amount || 0), 0))}
+              </p>
+            </div>
+          </div>
+
+          {paymentHistory.length === 0 ? (
+            <div className="mt-5 rounded-xl bg-gray-50 p-6 text-center">
+              <p className="font-semibold text-gray-800">No payment records found</p>
+              <p className="mt-1 text-sm text-gray-500">
+                Your payments will appear here after they are recorded by Lazzat Tiffin.
+              </p>
+            </div>
+          ) : (
+            <div className="mt-5 overflow-x-auto">
+              <table className="w-full min-w-[680px] text-left">
+                <thead className="bg-gray-50 text-xs uppercase tracking-wide text-gray-500">
+                  <tr>
+                    <th className="px-4 py-3">Date</th>
+                    <th className="px-4 py-3">Amount</th>
+                    <th className="px-4 py-3">Method</th>
+                    <th className="px-4 py-3">Note</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100">
+                  {paymentHistory.map((payment) => (
+                    <tr key={payment.id}>
+                      <td className="whitespace-nowrap px-4 py-3 text-sm text-gray-700">
+                        {formatDate(payment.payment_date)}
+                      </td>
+                      <td className="whitespace-nowrap px-4 py-3 text-sm font-bold text-green-700">
+                        {formatMoney(Number(payment.amount || 0))}
+                      </td>
+                      <td className="px-4 py-3 text-sm capitalize text-gray-700">
+                        {(payment.payment_method || "other").replaceAll("_", " ")}
+                      </td>
+                      <td className="px-4 py-3 text-sm text-gray-600">
+                        {payment.note || "—"}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
         </section>
 
       </div>
