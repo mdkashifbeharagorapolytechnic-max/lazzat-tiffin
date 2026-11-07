@@ -629,6 +629,19 @@ Healthy Tiffin Delivered Daily
                   </p>
                 </div>
               </div>
+              <div className="border-t border-amber-200 bg-amber-50 p-6 md:col-span-2">
+                <h3 className="font-bold text-amber-900">Guest / Extra Meals</h3>
+                <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm text-amber-900">Guest Lunch: {report.extraLunchCount} × ₹{report.lunchRate}</span>
+                    <span className="font-bold text-amber-900">{formatCurrency(report.extraLunchAmount)}</span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm text-amber-900">Guest Dinner: {report.extraDinnerCount} × ₹{report.dinnerRate}</span>
+                    <span className="font-bold text-amber-900">{formatCurrency(report.extraDinnerAmount)}</span>
+                  </div>
+                </div>
+              </div>
             </div>
 
             {/* BILL SUMMARY */}
