@@ -414,6 +414,10 @@ ${report.dinnerCount} × ₹${report.dinnerRate} = ${formatCurrency(
       report.dinnerAmount
     )}
 
+*GUEST / EXTRA MEALS*
+Lunch: ${report.extraLunchCount} × ₹${report.lunchRate} = ${formatCurrency(report.extraLunchAmount)}
+Dinner: ${report.extraDinnerCount} × ₹${report.dinnerRate} = ${formatCurrency(report.extraDinnerAmount)}
+
 ━━━━━━━━━━━━━━━━━━━━
 *TOTAL BILL:* ${formatCurrency(
       report.totalAmount
