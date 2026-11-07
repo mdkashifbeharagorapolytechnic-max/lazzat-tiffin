@@ -44,6 +44,10 @@ type BillingRow = {
   customer: Customer;
   lunchCount: number;
   dinnerCount: number;
+  extraLunchCount: number;
+  extraDinnerCount: number;
+  extraLunchAmount: number;
+  extraDinnerAmount: number;
   lunchRate: number;
   dinnerRate: number;
   lunchAmount: number;
@@ -513,6 +517,10 @@ export default function AdminBillingPage() {
               billing_month: billingMonth,
               lunch_count: row.lunchCount,
               dinner_count: row.dinnerCount,
+              extra_lunch_count: row.extraLunchCount,
+              extra_dinner_count: row.extraDinnerCount,
+              extra_lunch_amount: row.extraLunchAmount,
+              extra_dinner_amount: row.extraDinnerAmount,
               lunch_rate: row.lunchRate,
               dinner_rate: row.dinnerRate,
               lunch_amount: row.lunchAmount,
