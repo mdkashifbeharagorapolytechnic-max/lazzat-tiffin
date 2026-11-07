@@ -292,19 +292,18 @@ export default function BillingPage() {
             // RATES
             // =================================================
 
+            // Keep valid historical rates; fall back to the customer's
+            // current rate only when an old saved bill has a zero rate.
+            const savedLunchRate = Number(existing?.lunch_rate ?? 0);
+            const savedDinnerRate = Number(existing?.dinner_rate ?? 0);
+            const currentLunchRate = Number(customer.lunch_rate ?? 0);
+            const currentDinnerRate = Number(customer.dinner_rate ?? 0);
+
             const lunchRate =
-              Number(
-                existing?.lunch_rate ??
-                  customer.lunch_rate ??
-                  0
-              );
+              savedLunchRate > 0 ? savedLunchRate : currentLunchRate;
 
             const dinnerRate =
-              Number(
-                existing?.dinner_rate ??
-                  customer.dinner_rate ??
-                  0
-              );
+              savedDinnerRate > 0 ? savedDinnerRate : currentDinnerRate;
 
             // =================================================
             // NORMAL AMOUNTS
