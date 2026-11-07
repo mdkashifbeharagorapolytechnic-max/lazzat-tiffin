@@ -29,6 +29,8 @@ type Attendance = {
   attendance_date: string;
   lunch: boolean;
   dinner: boolean;
+  extra_lunch_count: number;
+  extra_dinner_count: number;
   lunch_rating: number | null;
   lunch_comment: string | null;
   dinner_rating: number | null;
@@ -43,6 +45,10 @@ type Billing = {
   billing_month: string;
   lunch_count: number;
   dinner_count: number;
+  extra_lunch_count: number;
+  extra_dinner_count: number;
+  extra_lunch_amount: number;
+  extra_dinner_amount: number;
   lunch_rate: number;
   dinner_rate: number;
   lunch_amount: number;
@@ -331,9 +337,13 @@ export default function CustomerDashboard() {
   const historySummary = useMemo(() => {
     const lunchCount = filteredHistory.filter((row) => row.attendance?.lunch).length;
     const dinnerCount = filteredHistory.filter((row) => row.attendance?.dinner).length;
+    const extraLunchCount = filteredHistory.reduce((sum, row) => sum + Number(row.attendance?.extra_lunch_count || 0), 0);
+    const extraDinnerCount = filteredHistory.reduce((sum, row) => sum + Number(row.attendance?.extra_dinner_count || 0), 0);
     return {
       lunchCount,
       dinnerCount,
+      extraLunchCount,
+      extraDinnerCount,
       customerMeals: lunchCount + dinnerCount,
       totalMeals: lunchCount + dinnerCount,
     };
@@ -413,7 +423,7 @@ export default function CustomerDashboard() {
       } = await supabase
         .from("attendance")
         .select(
-          "id,customer_id,attendance_date,lunch,dinner,lunch_rating,lunch_comment,dinner_rating,dinner_comment,lunch_source,dinner_source"
+          "id,customer_id,attendance_date,lunch,dinner,extra_lunch_count,extra_dinner_count,lunch_rating,lunch_comment,dinner_rating,dinner_comment,lunch_source,dinner_source"
         )
         .eq(
           "customer_id",
@@ -538,7 +548,7 @@ export default function CustomerDashboard() {
       } = await supabase
         .from("billing")
         .select(
-          "id,customer_id,billing_month,lunch_count,dinner_count,lunch_rate,dinner_rate,lunch_amount,dinner_amount,total_amount,paid_amount,due_amount,payment_status,generated_at"
+          "id,customer_id,billing_month,lunch_count,dinner_count,extra_lunch_count,extra_dinner_count,extra_lunch_amount,extra_dinner_amount,lunch_rate,dinner_rate,lunch_amount,dinner_amount,total_amount,paid_amount,due_amount,payment_status,generated_at"
         )
         .eq(
           "customer_id",
@@ -613,7 +623,9 @@ export default function CustomerDashboard() {
     const dinnerRate = Number(customer.dinner_rate || 0);
     const lunchAmount = historySummary.lunchCount * lunchRate;
     const dinnerAmount = historySummary.dinnerCount * dinnerRate;
-    const totalAmount = lunchAmount + dinnerAmount;
+    const extraLunchAmount = historySummary.extraLunchCount * lunchRate;
+    const extraDinnerAmount = historySummary.extraDinnerCount * dinnerRate;
+    const totalAmount = lunchAmount + dinnerAmount + extraLunchAmount + extraDinnerAmount;
 
     const rows = [...filteredHistory].reverse().map((row) => {
       const record = row.attendance;
@@ -629,6 +641,7 @@ export default function CustomerDashboard() {
           <td>${formatLongDate(row.date)}</td>
           <td class="${lunch ? "taken" : "not-taken"}">${lunch ? "Taken" : "Not taken"}</td>
           <td class="${dinner ? "taken" : "not-taken"}">${dinner ? "Taken" : "Not taken"}</td>
+          <td>Guest lunch: ${Number(record?.extra_lunch_count || 0)}, guest dinner: ${Number(record?.extra_dinner_count || 0)}</td>
           <td>${escapeHtml(feedback)}</td>
         </tr>`;
     }).join("");
@@ -693,13 +706,15 @@ export default function CustomerDashboard() {
           </div>
           <h2>Date-wise Attendance</h2>
           <table>
-            <thead><tr><th style="width:25%">Date</th><th style="width:17%">Lunch</th><th style="width:17%">Dinner</th><th>Meal Feedback</th></tr></thead>
+            <thead><tr><th style="width:20%">Date</th><th>Lunch</th><th>Dinner</th><th>Guest / Extra</th><th>Meal Feedback</th></tr></thead>
             <tbody>${rows}</tbody>
           </table>
           <table class="totals">
             <tbody>
               <tr><td>Lunch: ${historySummary.lunchCount} × ${formatMoney(lunchRate)}</td><td style="text-align:right">${formatMoney(lunchAmount)}</td></tr>
               <tr><td>Dinner: ${historySummary.dinnerCount} × ${formatMoney(dinnerRate)}</td><td style="text-align:right">${formatMoney(dinnerAmount)}</td></tr>
+              <tr><td>Guest Lunch: ${historySummary.extraLunchCount} × ${formatMoney(lunchRate)}</td><td style="text-align:right">${formatMoney(extraLunchAmount)}</td></tr>
+              <tr><td>Guest Dinner: ${historySummary.extraDinnerCount} × ${formatMoney(dinnerRate)}</td><td style="text-align:right">${formatMoney(extraDinnerAmount)}</td></tr>
               <tr class="grand"><td>Total Meal Amount</td><td style="text-align:right">${formatMoney(totalAmount)}</td></tr>
             </tbody>
           </table>
