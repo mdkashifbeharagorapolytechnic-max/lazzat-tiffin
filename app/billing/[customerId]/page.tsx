@@ -21,20 +21,6 @@ type Attendance = {
   dinner: boolean | null;
 };
 
-type ExtraMealRequest = {
-  id: string;
-  customer_id: string;
-  status: string;
-  quantity: number | null;
-};
-
-type ExtraMealRequestDay = {
-  request_id: string;
-  meal_date: string;
-  meal_type: "lunch" | "dinner";
-  included: boolean;
-};
-
 type ExistingBilling = {
   id: string;
   customer_id: string;
@@ -233,94 +219,6 @@ export default function BillingPage() {
           []) as Attendance[];
 
       // =====================================================
-      // EXTRA MEAL REQUESTS
-      // =====================================================
-
-      const {
-        data: extraRequestsData,
-        error: extraRequestsError,
-      } = await supabase
-        .from("extra_meal_requests")
-        .select(
-          "id,customer_id,status,quantity"
-        )
-        .in(
-          "customer_id",
-          customerIds
-        )
-        .eq(
-          "status",
-          "approved"
-        );
-
-      if (extraRequestsError) {
-        throw new Error(
-          extraRequestsError.message
-        );
-      }
-
-      const approvedExtraRequests =
-        (extraRequestsData ||
-          []) as ExtraMealRequest[];
-
-      // =====================================================
-      // EXTRA REQUEST IDS
-      // =====================================================
-
-      const extraRequestIds =
-        approvedExtraRequests.map(
-          (request) => request.id
-        );
-
-      // =====================================================
-      // EXTRA MEAL REQUEST DAYS
-      // =====================================================
-
-      let extraMealDays: ExtraMealRequestDay[] =
-        [];
-
-      if (
-        extraRequestIds.length > 0
-      ) {
-        const {
-          data: extraDaysData,
-          error: extraDaysError,
-        } = await supabase
-          .from(
-            "extra_meal_request_days"
-          )
-          .select(
-            "request_id,meal_date,meal_type,included"
-          )
-          .in(
-            "request_id",
-            extraRequestIds
-          )
-          .gte(
-            "meal_date",
-            monthStart
-          )
-          .lt(
-            "meal_date",
-            monthEnd
-          )
-          .eq(
-            "included",
-            true
-          );
-
-        if (extraDaysError) {
-          throw new Error(
-            extraDaysError.message
-          );
-        }
-
-        extraMealDays =
-          (extraDaysData ||
-            []) as ExtraMealRequestDay[];
-      }
-
-      // =====================================================
       // EXISTING BILLING
       // =====================================================
 
@@ -383,19 +281,28 @@ export default function BillingPage() {
                   item.dinner === true
               ).length;
 
+            const existing =
+              existingBilling.find(
+                (item) =>
+                  item.customer_id ===
+                  customer.id
+              );
+
             // =================================================
             // RATES
             // =================================================
 
             const lunchRate =
               Number(
-                customer.lunch_rate ||
+                existing?.lunch_rate ??
+                  customer.lunch_rate ??
                   0
               );
 
             const dinnerRate =
               Number(
-                customer.dinner_rate ||
+                existing?.dinner_rate ??
+                  customer.dinner_rate ??
                   0
               );
 
@@ -412,130 +319,10 @@ export default function BillingPage() {
               dinnerRate;
 
             // =================================================
-            // CUSTOMER EXTRA REQUESTS
-            // =================================================
-
-            const customerExtraRequests =
-              approvedExtraRequests.filter(
-                (request) =>
-                  request.customer_id ===
-                  customer.id
-              );
-
-            const customerRequestIds =
-              new Set(
-                customerExtraRequests.map(
-                  (request) =>
-                    request.id
-                )
-              );
-
-            // =================================================
-            // CUSTOMER EXTRA DAYS
-            // =================================================
-
-            const customerExtraDays =
-              extraMealDays.filter(
-                (day) =>
-                  customerRequestIds.has(
-                    day.request_id
-                  )
-              );
-
-            // =================================================
-            // EXTRA LUNCH COUNT
-            // =================================================
-
-            const extraLunchCount =
-              customerExtraDays
-                .filter(
-                  (day) =>
-                    day.meal_type ===
-                    "lunch"
-                )
-                .reduce(
-                  (total, day) => {
-                    const request =
-                      customerExtraRequests.find(
-                        (item) =>
-                          item.id ===
-                          day.request_id
-                      );
-
-                    return (
-                      total +
-                      Number(
-                        request?.quantity ||
-                          0
-                      )
-                    );
-                  },
-                  0
-                );
-
-            // =================================================
-            // EXTRA DINNER COUNT
-            // =================================================
-
-            const extraDinnerCount =
-              customerExtraDays
-                .filter(
-                  (day) =>
-                    day.meal_type ===
-                    "dinner"
-                )
-                .reduce(
-                  (total, day) => {
-                    const request =
-                      customerExtraRequests.find(
-                        (item) =>
-                          item.id ===
-                          day.request_id
-                      );
-
-                    return (
-                      total +
-                      Number(
-                        request?.quantity ||
-                          0
-                      )
-                    );
-                  },
-                  0
-                );
-
-            // =================================================
-            // EXTRA AMOUNTS
-            // =================================================
-
-            const extraLunchAmount =
-              extraLunchCount *
-              lunchRate;
-
-            const extraDinnerAmount =
-              extraDinnerCount *
-              dinnerRate;
-
-            // =================================================
             // TOTAL
             // =================================================
 
-            const totalAmount =
-              lunchAmount +
-              dinnerAmount +
-              extraLunchAmount +
-              extraDinnerAmount;
-
-            // =================================================
-            // EXISTING BILL
-            // =================================================
-
-            const existing =
-              existingBilling.find(
-                (item) =>
-                  item.customer_id ===
-                  customer.id
-              );
+            const totalAmount = lunchAmount + dinnerAmount;
 
             // =================================================
             // PAID
@@ -593,13 +380,9 @@ export default function BillingPage() {
               {
                 lunchCount,
                 dinnerCount,
-                extraLunchCount,
-                extraDinnerCount,
-                lunchAmount,
+lunchAmount,
                 dinnerAmount,
-                extraLunchAmount,
-                extraDinnerAmount,
-                totalAmount,
+totalAmount,
               }
             );
 
@@ -634,17 +417,10 @@ export default function BillingPage() {
               dinner_amount:
                 dinnerAmount,
 
-              extra_lunch_count:
-                extraLunchCount,
-
-              extra_dinner_count:
-                extraDinnerCount,
-
-              extra_lunch_amount:
-                extraLunchAmount,
-
-              extra_dinner_amount:
-                extraDinnerAmount,
+              extra_lunch_count: 0,
+              extra_dinner_count: 0,
+              extra_lunch_amount: 0,
+              extra_dinner_amount: 0,
 
               total_amount:
                 totalAmount,
@@ -990,28 +766,6 @@ export default function BillingPage() {
       0
     );
 
-  const totalExtraLunch =
-    billing.reduce(
-      (sum, row) =>
-        sum +
-        Number(
-          row.extra_lunch_count ||
-            0
-        ),
-      0
-    );
-
-  const totalExtraDinner =
-    billing.reduce(
-      (sum, row) =>
-        sum +
-        Number(
-          row.extra_dinner_count ||
-            0
-        ),
-      0
-    );
-
   // =========================================================
   // UI
   // =========================================================
@@ -1128,37 +882,6 @@ export default function BillingPage() {
 
               </div>
 
-              {/* ================================================= */}
-              {/* EXTRA MEAL SUMMARY */}
-              {/* ================================================= */}
-
-              <div className="mb-6 grid gap-4 md:grid-cols-2">
-
-                <div className="rounded-xl border border-green-200 bg-green-50 p-5 shadow-sm">
-                  <p className="text-sm font-semibold text-green-800">
-                    Extra Lunch Meals
-                  </p>
-
-                  <p className="mt-2 text-2xl font-bold text-green-700">
-                    {
-                      totalExtraLunch
-                    }
-                  </p>
-                </div>
-
-                <div className="rounded-xl border border-green-200 bg-green-50 p-5 shadow-sm">
-                  <p className="text-sm font-semibold text-green-800">
-                    Extra Dinner Meals
-                  </p>
-
-                  <p className="mt-2 text-2xl font-bold text-green-700">
-                    {
-                      totalExtraDinner
-                    }
-                  </p>
-                </div>
-
-              </div>
             </>
           )}
 
@@ -1216,14 +939,6 @@ export default function BillingPage() {
                       Dinner
                     </th>
 
-                    <th className="px-4 py-4 text-center">
-                      Extra Lunch
-                    </th>
-
-                    <th className="px-4 py-4 text-center">
-                      Extra Dinner
-                    </th>
-
                     <th className="px-4 py-4 text-right">
                       Lunch ₹
                     </th>
@@ -1232,15 +947,7 @@ export default function BillingPage() {
                       Dinner ₹
                     </th>
 
-                    <th className="px-4 py-4 text-right">
-                      Extra Lunch ₹
-                    </th>
-
-                    <th className="px-4 py-4 text-right">
-                      Extra Dinner ₹
-                    </th>
-
-                    <th className="px-4 py-4 text-right">
+<th className="px-4 py-4 text-right">
                       Total
                     </th>
 
@@ -1324,22 +1031,6 @@ export default function BillingPage() {
                             }
                           </td>
 
-                          {/* EXTRA LUNCH */}
-
-                          <td className="px-4 py-4 text-center font-bold text-green-700">
-                            {
-                              row.extra_lunch_count
-                            }
-                          </td>
-
-                          {/* EXTRA DINNER */}
-
-                          <td className="px-4 py-4 text-center font-bold text-green-700">
-                            {
-                              row.extra_dinner_count
-                            }
-                          </td>
-
                           {/* LUNCH AMOUNT */}
 
                           <td className="px-4 py-4 text-right">
@@ -1354,24 +1045,6 @@ export default function BillingPage() {
                           <td className="px-4 py-4 text-right">
                             ₹
                             {row.dinner_amount.toFixed(
-                              2
-                            )}
-                          </td>
-
-                          {/* EXTRA LUNCH AMOUNT */}
-
-                          <td className="px-4 py-4 text-right font-semibold text-green-700">
-                            ₹
-                            {row.extra_lunch_amount.toFixed(
-                              2
-                            )}
-                          </td>
-
-                          {/* EXTRA DINNER AMOUNT */}
-
-                          <td className="px-4 py-4 text-right font-semibold text-green-700">
-                            ₹
-                            {row.extra_dinner_amount.toFixed(
                               2
                             )}
                           </td>
@@ -1519,18 +1192,7 @@ export default function BillingPage() {
           </p>
 
           <p className="text-blue-800">
-            Extra Lunch Amount = Extra Lunch
-            Guests × Lunch Rate
-          </p>
-
-          <p className="text-blue-800">
-            Extra Dinner Amount = Extra Dinner
-            Guests × Dinner Rate
-          </p>
-
-          <p className="mt-1 font-semibold text-blue-900">
-            Total Bill = Lunch + Dinner +
-            Extra Lunch + Extra Dinner
+            
           </p>
 
           <p className="text-blue-800">

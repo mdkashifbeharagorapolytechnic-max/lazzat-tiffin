@@ -381,12 +381,7 @@ export default function AdminDashboard() {
               icon="💳"
             />
 
-            <QuickAction
-              href="/admin/extra-meal-requests"
-              title="Meal Requests"
-              description="Review extra meal requests"
-              icon="🍱"
-            />
+
 
             <QuickAction
               href="/admin/reviews"
