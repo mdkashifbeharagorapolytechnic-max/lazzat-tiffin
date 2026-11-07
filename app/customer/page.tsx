@@ -1712,6 +1712,18 @@ export default function CustomerDashboard() {
                     )}
                   </span>
                 </div>
+                <div className="grid grid-cols-4 border-t border-amber-200 bg-amber-50 px-4 py-4 text-sm">
+                  <span className="font-semibold text-amber-900">👥 Guest Lunch</span>
+                  <span>{Number(billing.extra_lunch_count || 0)}</span>
+                  <span>{formatMoney(billing.lunch_rate)}</span>
+                  <span className="font-semibold text-amber-900">{formatMoney(billing.extra_lunch_amount || 0)}</span>
+                </div>
+                <div className="grid grid-cols-4 border-t border-amber-200 bg-amber-50 px-4 py-4 text-sm">
+                  <span className="font-semibold text-amber-900">👥 Guest Dinner</span>
+                  <span>{Number(billing.extra_dinner_count || 0)}</span>
+                  <span>{formatMoney(billing.dinner_rate)}</span>
+                  <span className="font-semibold text-amber-900">{formatMoney(billing.extra_dinner_amount || 0)}</span>
+                </div>
 
               </div>
 
