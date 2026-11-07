@@ -346,8 +346,6 @@ export default function CustomerDashboard() {
       extraDinnerCount,
       customerMeals: lunchCount + dinnerCount,
       totalMeals: lunchCount + dinnerCount,
-      extraLunchCount,
-      extraDinnerCount,
     };
   }, [filteredHistory]);
 
