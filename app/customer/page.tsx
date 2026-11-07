@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
+import PushNotificationSetup from "@/components/PushNotificationSetup";
 
 type Customer = {
   id: string;
@@ -1363,6 +1364,7 @@ export default function CustomerDashboard() {
 
   return (
     <main className="min-h-screen bg-gray-100 px-4 py-6 md:px-8 md:py-8">
+      <PushNotificationSetup role="customer" />
       <div className="mx-auto max-w-6xl">
 
         {/* ================================================= */}

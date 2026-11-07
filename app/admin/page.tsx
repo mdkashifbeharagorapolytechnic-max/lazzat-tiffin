@@ -4,6 +4,8 @@ import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { supabase } from "@/lib/supabase";
 import AdminNotifications from "@/components/AdminNotifications";
+import PushNotificationSetup from "@/components/PushNotificationSetup";
+import MonthlyDueReminders from "@/components/MonthlyDueReminders";
 
 type Customer = {
   id: string;
@@ -270,6 +272,8 @@ export default function AdminDashboard() {
         </section>
 
         {/* Notifications */}
+        <PushNotificationSetup role="admin" />
+        <MonthlyDueReminders />
         <AdminNotifications />
 
         {/* Error */}
