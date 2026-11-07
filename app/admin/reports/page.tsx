@@ -302,7 +302,7 @@ export default function ReportsPage() {
       const savedTotalAmount = Number(billing?.total_amount ?? 0);
       const totalAmount =
         savedTotalAmount > 0
-          ? savedTotalAmount
+          ? Math.max(savedTotalAmount, calculatedTotal)
           : calculatedTotal;
 
       const paidAmount = Math.max(
