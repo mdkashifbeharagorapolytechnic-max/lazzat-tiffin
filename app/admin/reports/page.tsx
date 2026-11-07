@@ -245,17 +245,15 @@ export default function ReportsPage() {
 
       const payments = paymentsResult.data || [];
 
-      const lunchCount =
-        billing?.lunch_count ??
-        attendanceData.filter(
-          (item: Attendance) => item.lunch === true
-        ).length;
+      // Attendance counts must come from the attendance records.
+      // A previously generated bill can contain stale zero counts.
+      const lunchCount = attendanceData.filter(
+        (item: Attendance) => item.lunch === true
+      ).length;
 
-      const dinnerCount =
-        billing?.dinner_count ??
-        attendanceData.filter(
-          (item: Attendance) => item.dinner === true
-        ).length;
+      const dinnerCount = attendanceData.filter(
+        (item: Attendance) => item.dinner === true
+      ).length;
 
       const lunchAmount =
         billing?.lunch_amount ??
