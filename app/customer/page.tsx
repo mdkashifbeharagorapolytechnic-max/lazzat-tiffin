@@ -346,6 +346,8 @@ export default function CustomerDashboard() {
       extraDinnerCount,
       customerMeals: lunchCount + dinnerCount,
       totalMeals: lunchCount + dinnerCount,
+      extraLunchCount,
+      extraDinnerCount,
     };
   }, [filteredHistory]);
 
@@ -1491,7 +1493,7 @@ export default function CustomerDashboard() {
           <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             <HistorySummaryCard title="Lunch" value={historySummary.lunchCount} icon="🍱" />
             <HistorySummaryCard title="Dinner" value={historySummary.dinnerCount} icon="🌙" />
-            <HistorySummaryCard title="Total Meals" value={historySummary.totalMeals} icon="🍽️" />
+            <HistorySummaryCard title="Guest Meals" value={historySummary.extraLunchCount + historySummary.extraDinnerCount} icon="👥" guest />
           </div>
 
           {filteredHistory.length === 0 ? (
@@ -1502,16 +1504,20 @@ export default function CustomerDashboard() {
             </div>
           ) : (
             <div className="mt-6 overflow-hidden rounded-2xl border border-gray-200">
-              <div className="hidden grid-cols-3 bg-gray-50 px-5 py-4 text-sm font-semibold text-gray-600 md:grid">
-                <span>Date</span><span className="text-center">🍱 Lunch</span><span className="text-center">🌙 Dinner</span>
+              <div className="hidden grid-cols-4 bg-gray-50 px-5 py-4 text-sm font-semibold text-gray-600 md:grid">
+                <span>Date</span><span className="text-center">🍱 Lunch</span><span className="text-center">🌙 Dinner</span><span className="text-center">👥 Guest / Extra</span>
               </div>
               <div className="divide-y divide-gray-200">
                 {filteredHistory.map((row) => (
-                  <div key={row.date} className="grid grid-cols-1 gap-4 bg-white px-5 py-5 md:grid-cols-3 md:items-center">
+                  <div key={row.date} className="grid grid-cols-1 gap-4 bg-white px-5 py-5 md:grid-cols-4 md:items-center">
                     <p className="font-semibold text-gray-900">{formatLongDate(row.date)}</p>
                     <div className="text-left md:text-center">
                       <p className="mb-1 text-xs text-gray-400 md:hidden">Lunch</p>
                       <span className={`inline-block rounded-full px-3 py-1 text-xs font-semibold ${row.attendance?.lunch ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-500"}`}>{row.attendance?.lunch ? "✓ Taken" : "Not Taken"}</span>
+                    </div>
+                    <div className="text-left md:text-center">
+                      <p className="mb-1 text-xs text-gray-400 md:hidden">Guest / Extra Meals</p>
+                      <span className="inline-block rounded-full bg-amber-50 px-3 py-1 text-xs font-semibold text-amber-800">Lunch: {Number(row.attendance?.extra_lunch_count || 0)} · Dinner: {Number(row.attendance?.extra_dinner_count || 0)}</span>
                     </div>
                     <div className="text-left md:text-center">
                       <p className="mb-1 text-xs text-gray-400 md:hidden">Dinner</p>
