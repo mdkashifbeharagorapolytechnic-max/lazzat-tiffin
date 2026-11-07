@@ -50,6 +50,8 @@ type Report = {
   lunchCount: number;
   dinnerCount: number;
 
+  lunchRate: number;
+  dinnerRate: number;
   lunchAmount: number;
   dinnerAmount: number;
   totalAmount: number;
@@ -255,41 +257,48 @@ export default function ReportsPage() {
         (item: Attendance) => item.dinner === true
       ).length;
 
+      // A saved zero value can be a legacy billing bug, not a real charge.
+      // Preserve valid historical rates and amounts; recalculate only missing/zero values.
+      const savedLunchRate = Number(billing?.lunch_rate ?? 0);
+      const savedDinnerRate = Number(billing?.dinner_rate ?? 0);
+      const lunchRate =
+        savedLunchRate > 0
+          ? savedLunchRate
+          : Number(customer.lunch_rate ?? 0);
+      const dinnerRate =
+        savedDinnerRate > 0
+          ? savedDinnerRate
+          : Number(customer.dinner_rate ?? 0);
+
+      const calculatedLunchAmount = lunchCount * lunchRate;
+      const calculatedDinnerAmount = dinnerCount * dinnerRate;
+
+      const savedLunchAmount = Number(billing?.lunch_amount ?? 0);
+      const savedDinnerAmount = Number(billing?.dinner_amount ?? 0);
       const lunchAmount =
-        billing?.lunch_amount ??
-        lunchCount * Number(customer.lunch_rate);
-
+        savedLunchAmount > 0
+          ? savedLunchAmount
+          : calculatedLunchAmount;
       const dinnerAmount =
-        billing?.dinner_amount ??
-        dinnerCount * Number(customer.dinner_rate);
+        savedDinnerAmount > 0
+          ? savedDinnerAmount
+          : calculatedDinnerAmount;
 
-      const calculatedTotal =
-        lunchAmount + dinnerAmount;
-
+      const calculatedTotal = lunchAmount + dinnerAmount;
+      const savedTotalAmount = Number(billing?.total_amount ?? 0);
       const totalAmount =
-        billing?.total_amount ?? calculatedTotal;
+        savedTotalAmount > 0
+          ? savedTotalAmount
+          : calculatedTotal;
 
-      const paidAmount =
-        billing?.paid_amount ?? 0;
-
-      const dueAmount =
-        billing?.due_amount ??
-        Math.max(totalAmount - paidAmount, 0);
+      const paidAmount = Math.max(
+        Number(billing?.paid_amount ?? 0),
+        0
+      );
+      const dueAmount = Math.max(totalAmount - paidAmount, 0);
 
       let paymentStatus = "Pending";
-
-      if (billing?.payment_status) {
-        if (billing.payment_status === "paid") {
-          paymentStatus = "Paid";
-        } else if (
-          billing.payment_status === "partial"
-        ) {
-          paymentStatus = "Partial";
-        }
-      } else if (
-        totalAmount > 0 &&
-        paidAmount >= totalAmount
-      ) {
+      if (totalAmount > 0 && paidAmount >= totalAmount) {
         paymentStatus = "Paid";
       } else if (paidAmount > 0) {
         paymentStatus = "Partial";
@@ -302,6 +311,8 @@ export default function ReportsPage() {
         lunchCount,
         dinnerCount,
 
+        lunchRate,
+        dinnerRate,
         lunchAmount,
         dinnerAmount,
         totalAmount,
@@ -376,12 +387,12 @@ export default function ReportsPage() {
 *Phone:* ${report.customer.phone}
 
 *LUNCH*
-${report.lunchCount} × ₹${report.billing?.lunch_rate ?? report.customer.lunch_rate} = ${formatCurrency(
+${report.lunchCount} × ₹${report.lunchRate} = ${formatCurrency(
       report.lunchAmount
     )}
 
 *DINNER*
-${report.dinnerCount} × ₹${report.billing?.dinner_rate ?? report.customer.dinner_rate} = ${formatCurrency(
+${report.dinnerCount} × ₹${report.dinnerRate} = ${formatCurrency(
       report.dinnerAmount
     )}
 
@@ -568,8 +579,7 @@ Healthy Tiffin Delivered Daily
 
                     <p className="mt-1 text-sm text-gray-600">
                       {report.lunchCount} meals × ₹
-                      {report.billing?.lunch_rate ??
-                        report.customer.lunch_rate}
+                      {report.lunchRate}
                     </p>
                   </div>
 
@@ -590,8 +600,7 @@ Healthy Tiffin Delivered Daily
 
                     <p className="mt-1 text-sm text-gray-600">
                       {report.dinnerCount} meals × ₹
-                      {report.billing?.dinner_rate ??
-                        report.customer.dinner_rate}
+                      {report.dinnerRate}
                     </p>
                   </div>
 
