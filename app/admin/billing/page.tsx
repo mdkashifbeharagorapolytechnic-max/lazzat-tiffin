@@ -240,12 +240,20 @@ export default function AdminBillingPage() {
         (item) => item.dinner === true
       ).length;
 
+      const savedBill = existingBilling.find(
+        (bill) =>
+          bill.customer_id === customer.id
+      );
+
+      // Keep the rates saved on an existing bill so that
+      // changing a customer's current rates does not rewrite
+      // historical months when the bill is viewed or regenerated.
       const lunchRate = Number(
-        customer.lunch_rate || 0
+        savedBill?.lunch_rate ?? customer.lunch_rate ?? 0
       );
 
       const dinnerRate = Number(
-        customer.dinner_rate || 0
+        savedBill?.dinner_rate ?? customer.dinner_rate ?? 0
       );
 
       const lunchAmount = lunchCount * lunchRate;
@@ -253,11 +261,6 @@ export default function AdminBillingPage() {
 
       const totalAmount =
         lunchAmount + dinnerAmount;
-
-      const savedBill = existingBilling.find(
-        (bill) =>
-          bill.customer_id === customer.id
-      );
 
       const paidAmount = Number(
         paidAmounts[customer.id] ??
