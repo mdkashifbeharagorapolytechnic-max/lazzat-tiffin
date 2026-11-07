@@ -145,8 +145,8 @@ export default function AttendancePage() {
           .update({
             lunch,
             dinner,
-            extra_lunch_count: Math.max(0, Math.floor(extraLunchCount ?? 0)),
-            extra_dinner_count: Math.max(0, Math.floor(extraDinnerCount ?? 0)),
+            extra_lunch_count: Math.max(0, Math.floor(extraLunchCount ?? getAttendance(customerId).extra_lunch_count)),
+            extra_dinner_count: Math.max(0, Math.floor(extraDinnerCount ?? getAttendance(customerId).extra_dinner_count)),
           })
           .eq("id", existingRecord.id);
 
