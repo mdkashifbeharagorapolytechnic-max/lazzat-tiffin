@@ -35,7 +35,6 @@ export default function AdminNotifications() {
       const [
         customerRequestsResult,
         mealChangesResult,
-        extraMealRequestsResult,
         reviewsResult,
       ] = await Promise.all([
         /*
@@ -54,17 +53,6 @@ export default function AdminNotifications() {
          */
         supabase
           .from("meal_changes")
-          .select("id", {
-            count: "exact",
-            head: true,
-          })
-          .eq("status", "pending"),
-
-        /*
-         * EXTRA MEAL / GUEST REQUESTS
-         */
-        supabase
-          .from("extra_meal_requests")
           .select("id", {
             count: "exact",
             head: true,
@@ -99,10 +87,6 @@ export default function AdminNotifications() {
         throw mealChangesResult.error;
       }
 
-      if (extraMealRequestsResult.error) {
-        throw extraMealRequestsResult.error;
-      }
-
       if (reviewsResult.error) {
         /*
          * If reviews table does not exist, show the other
@@ -125,9 +109,6 @@ export default function AdminNotifications() {
 
       const mealChangeCount =
         mealChangesResult.count || 0;
-
-      const extraMealRequestCount =
-        extraMealRequestsResult.count || 0;
 
       const reviewCount =
         reviewsResult.error
@@ -175,24 +156,6 @@ export default function AdminNotifications() {
           icon: "🍱",
           color:
             "border-orange-200 bg-orange-50 text-orange-700",
-        });
-      }
-
-      /*
-       * EXTRA MEAL REQUESTS
-       */
-
-      if (extraMealRequestCount > 0) {
-        newNotifications.push({
-          id: "extra-meal-requests",
-          title: "Extra Meal Requests",
-          description:
-            "Customers have requested extra meals for their guests.",
-          count: extraMealRequestCount,
-          href: "/admin/extra-meal-requests",
-          icon: "👥",
-          color:
-            "border-green-200 bg-green-50 text-green-700",
         });
       }
 
