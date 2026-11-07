@@ -221,11 +221,9 @@ export default function ReportsPage() {
         supabase
           .from("payments")
           .select(
-            "id, amount, payment_date, payment_method, note, created_at"
+            "id, billing_id, amount, payment_date, payment_method, note, created_at"
           )
           .eq("customer_id", selectedCustomer)
-          .gte("payment_date", monthStart)
-          .lt("payment_date", monthEnd)
           .order("payment_date", {
             ascending: false,
           })
@@ -251,7 +249,23 @@ export default function ReportsPage() {
 
       const billing = billingResult.data;
 
-      const payments = paymentsResult.data || [];
+      // Show every payment linked to this month's bill, even when the
+      // customer pays in a later month. Keep date-based fallback for
+      // legacy payments that do not have a billing_id.
+      const allCustomerPayments = paymentsResult.data || [];
+      const payments = allCustomerPayments.filter((payment: any) => {
+        if (billing?.id) {
+          return payment.billing_id === billing.id ||
+            (!payment.billing_id &&
+              payment.payment_date >= monthStart &&
+              payment.payment_date < monthEnd);
+        }
+
+        return (
+          payment.payment_date >= monthStart &&
+          payment.payment_date < monthEnd
+        );
+      });
 
       // Attendance counts must come from the attendance records.
       // A previously generated bill can contain stale zero counts.
