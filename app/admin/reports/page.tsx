@@ -378,12 +378,12 @@ export default function ReportsPage() {
 *Phone:* ${report.customer.phone}
 
 *LUNCH*
-${report.lunchCount} × ₹${report.customer.lunch_rate} = ${formatCurrency(
+${report.lunchCount} × ₹${report.billing?.lunch_rate ?? report.customer.lunch_rate} = ${formatCurrency(
       report.lunchAmount
     )}
 
 *DINNER*
-${report.dinnerCount} × ₹${report.customer.dinner_rate} = ${formatCurrency(
+${report.dinnerCount} × ₹${report.billing?.dinner_rate ?? report.customer.dinner_rate} = ${formatCurrency(
       report.dinnerAmount
     )}
 
