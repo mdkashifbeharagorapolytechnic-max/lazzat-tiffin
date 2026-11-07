@@ -146,8 +146,9 @@ export default function PaymentsPage() {
         .select(
           "id, customer_id, billing_month, total_amount, paid_amount, due_amount"
         )
-        .eq("billing_month", month)
-        .order("generated_at", {
+        .lte("billing_month", month)
+        .gt("due_amount", 0)
+        .order("billing_month", {
           ascending: false,
         });
 
@@ -529,7 +530,7 @@ export default function PaymentsPage() {
             </h2>
 
             <p className="mt-1 text-sm text-gray-500">
-              {formatMonth(month)}
+              All unpaid bills up to {formatMonth(month)}. Payments are always applied to the selected bill month.
             </p>
           </div>
 
@@ -539,7 +540,7 @@ export default function PaymentsPage() {
             </div>
           ) : filteredRows.length === 0 ? (
             <div className="p-10 text-center text-gray-500">
-              No billing records found for this month.
+              No outstanding bills found up to this month.
             </div>
           ) : (
             <div className="overflow-x-auto">
@@ -548,6 +549,10 @@ export default function PaymentsPage() {
                   <tr>
                     <th className="px-5 py-4 text-left text-xs font-semibold uppercase text-gray-500">
                       Customer
+                    </th>
+
+                    <th className="px-5 py-4 text-left text-xs font-semibold uppercase text-gray-500">
+                      Bill Month
                     </th>
 
                     <th className="px-5 py-4 text-right text-xs font-semibold uppercase text-gray-500">
@@ -606,6 +611,10 @@ export default function PaymentsPage() {
                               {row.customer.phone}
                             </div>
                           )}
+                        </td>
+
+                        <td className="px-5 py-4 text-sm font-medium text-gray-700">
+                          {formatMonth(row.billing_month)}
                         </td>
 
                         <td className="px-5 py-4 text-right font-medium">
