@@ -188,6 +188,18 @@ export default function AttendancePage() {
   };
 
   // ---------------------------------------
+  // MOVE SELECTED DATE BY ONE DAY
+  // ---------------------------------------
+  const changeDate = (days: number) => {
+    const date = new Date(`${selectedDate}T12:00:00`);
+    date.setDate(date.getDate() + days);
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, "0");
+    const day = String(date.getDate()).padStart(2, "0");
+    setSelectedDate(`${year}-${month}-${day}`);
+  };
+
+  // ---------------------------------------
   // GET CUSTOMER ATTENDANCE
   // ---------------------------------------
   const getAttendance = (
@@ -249,14 +261,34 @@ export default function AttendancePage() {
             Select Date
           </label>
 
-          <input
-            type="date"
-            value={selectedDate}
-            onChange={(e) =>
-              setSelectedDate(e.target.value)
-            }
-            className="rounded-lg border border-gray-300 px-4 py-3 outline-none focus:ring-2 focus:ring-blue-500"
-          />
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={() => changeDate(-1)}
+              aria-label="Previous day"
+              title="Previous day"
+              className="flex h-11 w-11 items-center justify-center rounded-lg border border-gray-300 bg-white text-2xl font-semibold text-gray-700 transition hover:bg-gray-100"
+            >
+              ‹
+            </button>
+
+            <input
+              type="date"
+              value={selectedDate}
+              onChange={(e) => setSelectedDate(e.target.value)}
+              className="rounded-lg border border-gray-300 px-4 py-3 outline-none focus:ring-2 focus:ring-blue-500"
+            />
+
+            <button
+              type="button"
+              onClick={() => changeDate(1)}
+              aria-label="Next day"
+              title="Next day"
+              className="flex h-11 w-11 items-center justify-center rounded-lg border border-gray-300 bg-white text-2xl font-semibold text-gray-700 transition hover:bg-gray-100"
+            >
+              ›
+            </button>
+          </div>
 
           <p className="mt-2 text-sm text-gray-500">
             Customer ki attendance uski start date se pehle
