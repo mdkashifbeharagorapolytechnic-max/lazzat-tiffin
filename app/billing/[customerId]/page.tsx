@@ -19,6 +19,8 @@ type Attendance = {
   attendance_date: string;
   lunch: boolean | null;
   dinner: boolean | null;
+  extra_lunch_count: number;
+  extra_dinner_count: number;
 };
 
 type ExistingBilling = {
@@ -193,7 +195,7 @@ export default function BillingPage() {
       } = await supabase
         .from("attendance")
         .select(
-          "customer_id,attendance_date,lunch,dinner"
+          "customer_id,attendance_date,lunch,dinner,extra_lunch_count,extra_dinner_count"
         )
         .in(
           "customer_id",
@@ -281,6 +283,13 @@ export default function BillingPage() {
                   item.dinner === true
               ).length;
 
+            const extraLunchCount = customerAttendance.reduce(
+              (sum, item) => sum + Number(item.extra_lunch_count || 0), 0
+            );
+            const extraDinnerCount = customerAttendance.reduce(
+              (sum, item) => sum + Number(item.extra_dinner_count || 0), 0
+            );
+
             const existing =
               existingBilling.find(
                 (item) =>
@@ -316,12 +325,14 @@ export default function BillingPage() {
             const dinnerAmount =
               dinnerCount *
               dinnerRate;
+            const extraLunchAmount = extraLunchCount * lunchRate;
+            const extraDinnerAmount = extraDinnerCount * dinnerRate;
 
             // =================================================
             // TOTAL
             // =================================================
 
-            const totalAmount = lunchAmount + dinnerAmount;
+            const totalAmount = lunchAmount + dinnerAmount + extraLunchAmount + extraDinnerAmount;
 
             // =================================================
             // PAID
@@ -416,10 +427,10 @@ totalAmount,
               dinner_amount:
                 dinnerAmount,
 
-              extra_lunch_count: 0,
-              extra_dinner_count: 0,
-              extra_lunch_amount: 0,
-              extra_dinner_amount: 0,
+              extra_lunch_count: extraLunchCount,
+              extra_dinner_count: extraDinnerCount,
+              extra_lunch_amount: extraLunchAmount,
+              extra_dinner_amount: extraDinnerAmount,
 
               total_amount:
                 totalAmount,

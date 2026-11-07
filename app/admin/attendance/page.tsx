@@ -17,6 +17,8 @@ type AttendanceRecord = {
   customer_id: string;
   lunch: boolean;
   dinner: boolean;
+  extra_lunch_count: number;
+  extra_dinner_count: number;
 };
 
 export default function AttendancePage() {
@@ -31,6 +33,7 @@ export default function AttendancePage() {
 
   const [loading, setLoading] = useState(true);
   const [savingId, setSavingId] = useState<string | null>(null);
+  const [guestDraft, setGuestDraft] = useState<Record<string, { lunch?: string; dinner?: string }>>({});
 
   // ---------------------------------------
   // LOAD CUSTOMERS + ATTENDANCE
@@ -74,7 +77,7 @@ export default function AttendancePage() {
     const { data: attendanceData, error: attendanceError } =
       await supabase
         .from("attendance")
-        .select("customer_id, lunch, dinner")
+        .select("customer_id, lunch, dinner, extra_lunch_count, extra_dinner_count")
         .eq("attendance_date", selectedDate);
 
     if (attendanceError) {
@@ -91,6 +94,8 @@ export default function AttendancePage() {
         customer_id: record.customer_id,
         lunch: record.lunch === true,
         dinner: record.dinner === true,
+        extra_lunch_count: Number(record.extra_lunch_count || 0),
+        extra_dinner_count: Number(record.extra_dinner_count || 0),
       };
     });
 
@@ -109,7 +114,9 @@ export default function AttendancePage() {
   const saveAttendance = async (
     customerId: string,
     lunch: boolean,
-    dinner: boolean
+    dinner: boolean,
+    extraLunchCount?: number,
+    extraDinnerCount?: number
   ) => {
     setSavingId(customerId);
 
@@ -138,6 +145,8 @@ export default function AttendancePage() {
           .update({
             lunch,
             dinner,
+            extra_lunch_count: Math.max(0, Math.floor(extraLunchCount ?? getAttendance(customerId).extra_lunch_count)),
+            extra_dinner_count: Math.max(0, Math.floor(extraDinnerCount ?? getAttendance(customerId).extra_dinner_count)),
           })
           .eq("id", existingRecord.id);
 
@@ -159,6 +168,8 @@ export default function AttendancePage() {
             attendance_date: selectedDate,
             lunch,
             dinner,
+            extra_lunch_count: Math.max(0, Math.floor(extraLunchCount ?? 0)),
+            extra_dinner_count: Math.max(0, Math.floor(extraDinnerCount ?? 0)),
           });
 
         if (insertError) {
@@ -171,20 +182,50 @@ export default function AttendancePage() {
       // ---------------------------------------
       // UPDATE UI IMMEDIATELY
       // ---------------------------------------
+      const savedExtraLunch = Math.max(0, Math.floor(extraLunchCount ?? getAttendance(customerId).extra_lunch_count));
+      const savedExtraDinner = Math.max(0, Math.floor(extraDinnerCount ?? getAttendance(customerId).extra_dinner_count));
       setAttendance((prev) => ({
         ...prev,
         [customerId]: {
           customer_id: customerId,
           lunch,
           dinner,
+          extra_lunch_count: savedExtraLunch,
+          extra_dinner_count: savedExtraDinner,
         },
       }));
+      setGuestDraft((prev) => {
+        const next = { ...prev };
+        delete next[customerId];
+        return next;
+      });
     } catch (error) {
       console.error("ATTENDANCE SAVE ERROR:", error);
       alert("Attendance save nahi hui.");
     } finally {
       setSavingId(null);
     }
+  };
+
+  const updateGuestDraft = (customerId: string, meal: "lunch" | "dinner", value: string) => {
+    setGuestDraft((prev) => ({
+      ...prev,
+      [customerId]: { ...prev[customerId], [meal]: value },
+    }));
+  };
+
+  const saveGuestCount = (customerId: string, meal: "lunch" | "dinner") => {
+    const record = getAttendance(customerId);
+    const value = guestDraft[customerId]?.[meal];
+    if (value === undefined) return;
+    const count = Math.max(0, Math.floor(Number(value) || 0));
+    saveAttendance(
+      customerId,
+      record.lunch,
+      record.dinner,
+      meal === "lunch" ? count : record.extra_lunch_count,
+      meal === "dinner" ? count : record.extra_dinner_count
+    );
   };
 
   // ---------------------------------------
@@ -210,6 +251,8 @@ export default function AttendancePage() {
         customer_id: customerId,
         lunch: false,
         dinner: false,
+        extra_lunch_count: 0,
+        extra_dinner_count: 0,
       }
     );
   };
@@ -329,6 +372,12 @@ export default function AttendancePage() {
                     <th className="px-5 py-4 text-center">
                       Dinner
                     </th>
+                    <th className="px-5 py-4 text-center">
+                      Guest Lunch
+                    </th>
+                    <th className="px-5 py-4 text-center">
+                      Guest Dinner
+                    </th>
                   </tr>
                 </thead>
 
@@ -403,6 +452,36 @@ export default function AttendancePage() {
                               ? "Present ✓"
                               : "Absent"}
                           </button>
+                        </td>
+
+                        {/* GUEST / EXTRA MEALS */}
+                        <td className="px-5 py-4 text-center">
+                          <input
+                            type="number"
+                            min="0"
+                            step="1"
+                            value={guestDraft[customer.id]?.lunch ?? String(record.extra_lunch_count)}
+                            onChange={(event) => updateGuestDraft(customer.id, "lunch", event.target.value)}
+                            onBlur={() => saveGuestCount(customer.id, "lunch")}
+                            disabled={isSaving}
+                            aria-label={`Guest lunch meals for ${customer.name}`}
+                            className="w-20 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-center font-semibold text-amber-800"
+                          />
+                          <p className="mt-1 text-xs text-amber-700">Extra lunch</p>
+                        </td>
+                        <td className="px-5 py-4 text-center">
+                          <input
+                            type="number"
+                            min="0"
+                            step="1"
+                            value={guestDraft[customer.id]?.dinner ?? String(record.extra_dinner_count)}
+                            onChange={(event) => updateGuestDraft(customer.id, "dinner", event.target.value)}
+                            onBlur={() => saveGuestCount(customer.id, "dinner")}
+                            disabled={isSaving}
+                            aria-label={`Guest dinner meals for ${customer.name}`}
+                            className="w-20 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-center font-semibold text-amber-800"
+                          />
+                          <p className="mt-1 text-xs text-amber-700">Extra dinner</p>
                         </td>
 
                       </tr>

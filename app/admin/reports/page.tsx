@@ -31,6 +31,8 @@ type Billing = {
 type Attendance = {
   lunch: boolean;
   dinner: boolean;
+  extra_lunch_count: number;
+  extra_dinner_count: number;
   attendance_date: string;
 };
 
@@ -49,6 +51,10 @@ type Report = {
 
   lunchCount: number;
   dinnerCount: number;
+  extraLunchCount: number;
+  extraDinnerCount: number;
+  extraLunchAmount: number;
+  extraDinnerAmount: number;
 
   lunchRate: number;
   dinnerRate: number;
@@ -194,7 +200,7 @@ export default function ReportsPage() {
         supabase
           .from("attendance")
           .select(
-            "lunch, dinner, attendance_date"
+            "lunch, dinner, extra_lunch_count, extra_dinner_count, attendance_date"
           )
           .eq("customer_id", selectedCustomer)
           .gte("attendance_date", monthStart)
@@ -206,7 +212,7 @@ export default function ReportsPage() {
         supabase
           .from("billing")
           .select(
-            "id, customer_id, billing_month, lunch_count, dinner_count, lunch_rate, dinner_rate, lunch_amount, dinner_amount, total_amount, paid_amount, due_amount, payment_status"
+            "id, customer_id, billing_month, lunch_count, dinner_count, extra_lunch_count, extra_dinner_count, extra_lunch_amount, extra_dinner_amount, lunch_rate, dinner_rate, lunch_amount, dinner_amount, total_amount, paid_amount, due_amount, payment_status"
           )
           .eq("customer_id", selectedCustomer)
           .eq("billing_month", `${monthStart}`)
@@ -256,6 +262,12 @@ export default function ReportsPage() {
       const dinnerCount = attendanceData.filter(
         (item: Attendance) => item.dinner === true
       ).length;
+      const extraLunchCount = attendanceData.reduce(
+        (sum: number, item: Attendance) => sum + Number(item.extra_lunch_count || 0), 0
+      );
+      const extraDinnerCount = attendanceData.reduce(
+        (sum: number, item: Attendance) => sum + Number(item.extra_dinner_count || 0), 0
+      );
 
       // A saved zero value can be a legacy billing bug, not a real charge.
       // Preserve valid historical rates and amounts; recalculate only missing/zero values.
@@ -272,6 +284,8 @@ export default function ReportsPage() {
 
       const calculatedLunchAmount = lunchCount * lunchRate;
       const calculatedDinnerAmount = dinnerCount * dinnerRate;
+      const extraLunchAmount = extraLunchCount * lunchRate;
+      const extraDinnerAmount = extraDinnerCount * dinnerRate;
 
       const savedLunchAmount = Number(billing?.lunch_amount ?? 0);
       const savedDinnerAmount = Number(billing?.dinner_amount ?? 0);
@@ -284,11 +298,11 @@ export default function ReportsPage() {
           ? savedDinnerAmount
           : calculatedDinnerAmount;
 
-      const calculatedTotal = lunchAmount + dinnerAmount;
+      const calculatedTotal = lunchAmount + dinnerAmount + extraLunchAmount + extraDinnerAmount;
       const savedTotalAmount = Number(billing?.total_amount ?? 0);
       const totalAmount =
         savedTotalAmount > 0
-          ? savedTotalAmount
+          ? Math.max(savedTotalAmount, calculatedTotal)
           : calculatedTotal;
 
       const paidAmount = Math.max(
@@ -310,6 +324,10 @@ export default function ReportsPage() {
 
         lunchCount,
         dinnerCount,
+        extraLunchCount,
+        extraDinnerCount,
+        extraLunchAmount,
+        extraDinnerAmount,
 
         lunchRate,
         dinnerRate,
@@ -395,6 +413,10 @@ ${report.lunchCount} × ₹${report.lunchRate} = ${formatCurrency(
 ${report.dinnerCount} × ₹${report.dinnerRate} = ${formatCurrency(
       report.dinnerAmount
     )}
+
+*GUEST / EXTRA MEALS*
+Lunch: ${report.extraLunchCount} × ₹${report.lunchRate} = ${formatCurrency(report.extraLunchAmount)}
+Dinner: ${report.extraDinnerCount} × ₹${report.dinnerRate} = ${formatCurrency(report.extraDinnerAmount)}
 
 ━━━━━━━━━━━━━━━━━━━━
 *TOTAL BILL:* ${formatCurrency(
@@ -609,6 +631,19 @@ Healthy Tiffin Delivered Daily
                       report.dinnerAmount
                     )}
                   </p>
+                </div>
+              </div>
+              <div className="border-t border-amber-200 bg-amber-50 p-6 md:col-span-2">
+                <h3 className="font-bold text-amber-900">Guest / Extra Meals</h3>
+                <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm text-amber-900">Guest Lunch: {report.extraLunchCount} × ₹{report.lunchRate}</span>
+                    <span className="font-bold text-amber-900">{formatCurrency(report.extraLunchAmount)}</span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm text-amber-900">Guest Dinner: {report.extraDinnerCount} × ₹{report.dinnerRate}</span>
+                    <span className="font-bold text-amber-900">{formatCurrency(report.extraDinnerAmount)}</span>
+                  </div>
                 </div>
               </div>
             </div>
