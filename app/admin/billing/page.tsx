@@ -154,6 +154,8 @@ export default function AdminBillingPage() {
   const [paymentMethods, setPaymentMethods] = useState<Record<string, string>>({});
   const [paymentNotes, setPaymentNotes] = useState<Record<string, string>>({});
   const [payments, setPayments] = useState<Payment[]>([]);
+  const [editingPayment, setEditingPayment] = useState<Payment | null>(null);
+  const [savingPaymentEdit, setSavingPaymentEdit] = useState(false);
 
   const [loading, setLoading] = useState(true);
   const [savingCustomer, setSavingCustomer] = useState<string | null>(
@@ -436,6 +438,86 @@ export default function AdminBillingPage() {
     }
   }
 
+  function startEditingPayment(payment: Payment) {
+    setEditingPayment({ ...payment });
+    setError("");
+    setSuccess("");
+  }
+
+  async function saveEditedPayment() {
+    if (!editingPayment) return;
+
+    try {
+      setSavingPaymentEdit(true);
+      setError("");
+      setSuccess("");
+
+      const amount = Number(editingPayment.amount);
+      if (!Number.isFinite(amount) || amount <= 0) {
+        throw new Error("Payment amount 0 se zyada hona chahiye.");
+      }
+      if (!editingPayment.payment_date) {
+        throw new Error("Payment date select karein.");
+      }
+
+      const { data: updatedPayment, error: paymentError } = await supabase
+        .from("payments")
+        .update({
+          amount,
+          payment_date: editingPayment.payment_date,
+          payment_method: editingPayment.payment_method || "cash",
+          note: editingPayment.note || null,
+        })
+        .eq("id", editingPayment.id)
+        .select("id")
+        .maybeSingle();
+
+      if (paymentError) throw paymentError;
+      if (!updatedPayment) {
+        throw new Error("Payment update nahi hua. Admin permission check karein.");
+      }
+
+      if (editingPayment.billing_id) {
+        const { data: bill, error: billReadError } = await supabase
+          .from("billing")
+          .select("id,total_amount")
+          .eq("id", editingPayment.billing_id)
+          .single();
+        if (billReadError) throw billReadError;
+
+        const { data: billPayments, error: paymentsReadError } = await supabase
+          .from("payments")
+          .select("amount")
+          .eq("billing_id", editingPayment.billing_id);
+        if (paymentsReadError) throw paymentsReadError;
+
+        const paidAmount = (billPayments || []).reduce(
+          (sum, payment) => sum + Number(payment.amount || 0),
+          0
+        );
+        const totalAmount = Number(bill.total_amount || 0);
+        const { error: billUpdateError } = await supabase
+          .from("billing")
+          .update({
+            paid_amount: paidAmount,
+            due_amount: Math.max(totalAmount - paidAmount, 0),
+            payment_status: getStatus(totalAmount, paidAmount),
+          })
+          .eq("id", editingPayment.billing_id);
+        if (billUpdateError) throw billUpdateError;
+      }
+
+      setEditingPayment(null);
+      setSuccess("Payment details successfully update ho gaye.");
+      await loadBillingData();
+    } catch (err: any) {
+      console.error("Edit billing payment error:", err);
+      setError(err?.message || "Payment update nahi ho paya.");
+    } finally {
+      setSavingPaymentEdit(false);
+    }
+  }
+
   async function generateBill(row: BillingRow) {
     try {
       setGeneratingCustomer(row.customer.id);
@@ -605,6 +687,79 @@ export default function AdminBillingPage() {
         {success && (
           <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-700">
             {success}
+          </div>
+        )}
+
+        {editingPayment && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+            <div className="w-full max-w-md rounded-2xl bg-white p-5 shadow-xl">
+              <h2 className="text-lg font-bold text-slate-900">Edit Payment</h2>
+              <p className="mt-1 text-sm text-slate-500">Amount, date, method aur note update karein.</p>
+              <div className="mt-4 space-y-3">
+                <label className="block text-sm font-medium text-slate-700">
+                  Amount
+                  <input
+                    type="number"
+                    min="0.01"
+                    step="0.01"
+                    value={editingPayment.amount}
+                    onChange={(event) => setEditingPayment((current) => current ? { ...current, amount: Number(event.target.value) } : current)}
+                    className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2"
+                  />
+                </label>
+                <label className="block text-sm font-medium text-slate-700">
+                  Payment Date
+                  <input
+                    type="date"
+                    value={editingPayment.payment_date}
+                    onChange={(event) => setEditingPayment((current) => current ? { ...current, payment_date: event.target.value } : current)}
+                    className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2"
+                  />
+                </label>
+                <label className="block text-sm font-medium text-slate-700">
+                  Payment Method
+                  <select
+                    value={editingPayment.payment_method || "cash"}
+                    onChange={(event) => setEditingPayment((current) => current ? { ...current, payment_method: event.target.value } : current)}
+                    className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2"
+                  >
+                    <option value="cash">Cash</option>
+                    <option value="upi">UPI</option>
+                    <option value="bank_transfer">Bank Transfer</option>
+                    <option value="card">Card</option>
+                    <option value="other">Other</option>
+                  </select>
+                </label>
+                <label className="block text-sm font-medium text-slate-700">
+                  Note (optional)
+                  <input
+                    type="text"
+                    value={editingPayment.note || ""}
+                    onChange={(event) => setEditingPayment((current) => current ? { ...current, note: event.target.value } : current)}
+                    className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2"
+                    placeholder="Note"
+                  />
+                </label>
+              </div>
+              <div className="mt-5 flex justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => setEditingPayment(null)}
+                  disabled={savingPaymentEdit}
+                  className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 disabled:opacity-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={saveEditedPayment}
+                  disabled={savingPaymentEdit}
+                  className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
+                >
+                  {savingPaymentEdit ? "Saving..." : "Save Changes"}
+                </button>
+              </div>
+            </div>
           </div>
         )}
 
@@ -851,9 +1006,18 @@ export default function AdminBillingPage() {
                           <div className="max-h-24 overflow-y-auto rounded-md bg-slate-50 p-2 text-xs text-slate-600">
                             <p className="mb-1 font-semibold">Payment History</p>
                             {row.payments.length > 0 ? row.payments.map((payment) => (
-                              <p key={payment.id}>
-                                {payment.payment_date.split("-").reverse().join("/")} — {formatCurrency(Number(payment.amount))}
-                              </p>
+                              <div key={payment.id} className="flex items-center justify-between gap-2 border-b border-slate-200 py-1 last:border-0">
+                                <span>
+                                  {payment.payment_date.split("-").reverse().join("/")} — {formatCurrency(Number(payment.amount))}
+                                </span>
+                                <button
+                                  type="button"
+                                  onClick={() => startEditingPayment(payment)}
+                                  className="rounded px-2 py-1 font-semibold text-blue-700 hover:bg-blue-50"
+                                >
+                                  Edit
+                                </button>
+                              </div>
                             )) : <p>No payments recorded</p>}
                           </div>
                           <button
