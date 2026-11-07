@@ -688,6 +688,14 @@ export default function AdminBillingPage() {
                       Dinner
                     </th>
 
+                    <th className="px-4 py-4 text-center font-semibold">
+                      Guest Lunch
+                    </th>
+
+                    <th className="px-4 py-4 text-center font-semibold">
+                      Guest Dinner
+                    </th>
+
                     <th className="px-4 py-4 text-right font-semibold">
                       Lunch Rate
                     </th>
@@ -751,6 +759,14 @@ export default function AdminBillingPage() {
                       {/* Dinner Count */}
                       <td className="px-4 py-5 text-center font-medium text-slate-800">
                         {row.dinnerCount}
+                      </td>
+
+                      {/* Guest Meal Counts */}
+                      <td className="px-4 py-5 text-center font-semibold text-amber-800">
+                        {row.extraLunchCount} <span className="text-xs">({formatCurrency(row.extraLunchAmount)})</span>
+                      </td>
+                      <td className="px-4 py-5 text-center font-semibold text-amber-800">
+                        {row.extraDinnerCount} <span className="text-xs">({formatCurrency(row.extraDinnerAmount)})</span>
                       </td>
 
                       {/* Lunch Rate */}
