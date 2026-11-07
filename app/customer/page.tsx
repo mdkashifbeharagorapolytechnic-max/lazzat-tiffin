@@ -1320,7 +1320,6 @@ export default function CustomerDashboard() {
 
   if (loading) {
     return (
-      <PushNotificationSetup role="customer" />
       <main className="flex min-h-screen items-center justify-center bg-gray-100 px-4">
         <div className="rounded-2xl bg-white p-8 text-center shadow-xl">
           <p className="text-gray-600">
@@ -1365,6 +1364,7 @@ export default function CustomerDashboard() {
 
   return (
     <main className="min-h-screen bg-gray-100 px-4 py-6 md:px-8 md:py-8">
+      <PushNotificationSetup role="customer" />
       <div className="mx-auto max-w-6xl">
 
         {/* ================================================= */}
