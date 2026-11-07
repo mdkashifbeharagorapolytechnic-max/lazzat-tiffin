@@ -248,13 +248,17 @@ export default function AdminBillingPage() {
       // Keep the rates saved on an existing bill so that
       // changing a customer's current rates does not rewrite
       // historical months when the bill is viewed or regenerated.
-      const lunchRate = Number(
-        savedBill?.lunch_rate ?? customer.lunch_rate ?? 0
-      );
+      // Preserve a valid historical rate, but recover from legacy
+      // saved bills that contain a zero rate when the customer has a rate.
+      const savedLunchRate = Number(savedBill?.lunch_rate ?? 0);
+      const savedDinnerRate = Number(savedBill?.dinner_rate ?? 0);
+      const currentLunchRate = Number(customer.lunch_rate ?? 0);
+      const currentDinnerRate = Number(customer.dinner_rate ?? 0);
 
-      const dinnerRate = Number(
-        savedBill?.dinner_rate ?? customer.dinner_rate ?? 0
-      );
+      const lunchRate =
+        savedLunchRate > 0 ? savedLunchRate : currentLunchRate;
+      const dinnerRate =
+        savedDinnerRate > 0 ? savedDinnerRate : currentDinnerRate;
 
       const lunchAmount = lunchCount * lunchRate;
       const dinnerAmount = dinnerCount * dinnerRate;
