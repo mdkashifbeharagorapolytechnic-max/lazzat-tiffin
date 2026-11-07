@@ -692,7 +692,7 @@ export default function CustomerDashboard() {
       <html>
         <head>
           <meta charset="utf-8">
-          <title>Lazzat Tiffin - Meal History</title>
+          <title>Lazzat Tiffin - Meal Data</title>
           <style>
             @page { size: A4; margin: 16mm; }
             * { box-sizing: border-box; }
@@ -724,7 +724,7 @@ export default function CustomerDashboard() {
         <body>
           <div class="header">
             <div><div class="brand">LAZZAT TIFFIN</div><div class="subtitle">Customer Meal Record</div></div>
-            <div class="doc-label">MEAL HISTORY<br><span style="font-weight:400">Generated on ${new Date().toLocaleDateString("en-IN")}</span></div>
+            <div class="doc-label">MEAL DATA<br><span style="font-weight:400">Generated on ${new Date().toLocaleDateString("en-IN")}</span></div>
           </div>
           <h2>Customer Details</h2>
           <div class="details">
@@ -1568,9 +1568,9 @@ export default function CustomerDashboard() {
           <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
             <div>
               <p className="text-sm font-semibold text-green-600">MEAL RECORD</p>
-              <h2 className="mt-1 text-2xl font-bold text-gray-900">Meal History</h2>
+              <h2 className="mt-1 text-2xl font-bold text-gray-900">Meal Data</h2>
               <p className="mt-1 text-sm text-gray-500">
-                Select month or date range and download your meal history as PDF.
+                Select month or date range and download your meal data as PDF.
               </p>
             </div>
             <button
@@ -1580,7 +1580,7 @@ export default function CustomerDashboard() {
               className="inline-flex shrink-0 items-center justify-center gap-2 rounded-xl bg-green-700 px-5 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-green-800 disabled:cursor-not-allowed disabled:opacity-50"
             >
               <span aria-hidden="true">↓</span>
-              Download Meal History PDF
+              Download Meal Data PDF
             </button>
           </div>
 
