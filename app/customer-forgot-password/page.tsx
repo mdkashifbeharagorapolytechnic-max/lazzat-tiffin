@@ -33,7 +33,7 @@ export default function CustomerForgotPasswordPage() {
       await supabase.auth.resetPasswordForEmail(
         cleanEmail,
         {
-          redirectTo: `${window.location.origin}/customer-update-password`,
+          redirectTo: https://lazzat-tiffin.vercel.app/customer-update-password,
         }
       );
 
