@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
+import PushNotificationSetup from "@/components/PushNotificationSetup";
 
 type Customer = {
   id: string;
@@ -1319,6 +1320,7 @@ export default function CustomerDashboard() {
 
   if (loading) {
     return (
+      <PushNotificationSetup role="customer" />
       <main className="flex min-h-screen items-center justify-center bg-gray-100 px-4">
         <div className="rounded-2xl bg-white p-8 text-center shadow-xl">
           <p className="text-gray-600">
