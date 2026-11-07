@@ -947,15 +947,7 @@ totalAmount,
                       Dinner ₹
                     </th>
 
-                    <th className="px-4 py-4 text-right">
-                      Extra Lunch ₹
-                    </th>
-
-                    <th className="px-4 py-4 text-right">
-                      Extra Dinner ₹
-                    </th>
-
-                    <th className="px-4 py-4 text-right">
+<th className="px-4 py-4 text-right">
                       Total
                     </th>
 
