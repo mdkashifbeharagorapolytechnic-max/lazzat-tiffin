@@ -592,6 +592,128 @@ export default function CustomerDashboard() {
   }
 
   /* ================================================= */
+  /* DOWNLOAD MEAL HISTORY PDF */
+  /* ================================================= */
+
+  function downloadMealHistoryPdf() {
+    if (!customer || filteredHistory.length === 0) return;
+
+    const escapeHtml = (value: string) => {
+      const entities: Record<string, string> = {
+        "&": "&amp;",
+        "<": "&lt;",
+        ">": "&gt;",
+        '"': "&quot;",
+        "'": "&#39;",
+      };
+      return value.replace(/[&<>"']/g, (character) => entities[character] || character);
+    };
+
+    const lunchRate = Number(customer.lunch_rate || 0);
+    const dinnerRate = Number(customer.dinner_rate || 0);
+    const lunchAmount = historySummary.lunchCount * lunchRate;
+    const dinnerAmount = historySummary.dinnerCount * dinnerRate;
+    const totalAmount = lunchAmount + dinnerAmount;
+
+    const rows = [...filteredHistory].reverse().map((row) => {
+      const record = row.attendance;
+      const lunch = Boolean(record?.lunch);
+      const dinner = Boolean(record?.dinner);
+      const feedback = [
+        record?.lunch_rating ? `Lunch: ${record.lunch_rating}/5${record.lunch_comment ? ` — ${record.lunch_comment}` : ""}` : "",
+        record?.dinner_rating ? `Dinner: ${record.dinner_rating}/5${record.dinner_comment ? ` — ${record.dinner_comment}` : ""}` : "",
+      ].filter(Boolean).join("<br>") || "—";
+
+      return `
+        <tr>
+          <td>${formatLongDate(row.date)}</td>
+          <td class="${lunch ? "taken" : "not-taken"}">${lunch ? "Taken" : "Not taken"}</td>
+          <td class="${dinner ? "taken" : "not-taken"}">${dinner ? "Taken" : "Not taken"}</td>
+          <td>${escapeHtml(feedback)}</td>
+        </tr>`;
+    }).join("");
+
+    const printWindow = window.open("", "_blank", "width=1000,height=750");
+    if (!printWindow) {
+      setError("Please allow pop-ups for this website, then try downloading the PDF again.");
+      return;
+    }
+
+    printWindow.document.write(`
+      <!doctype html>
+      <html>
+        <head>
+          <meta charset="utf-8">
+          <title>Lazzat Tiffin - Meal History</title>
+          <style>
+            @page { size: A4; margin: 16mm; }
+            * { box-sizing: border-box; }
+            body { margin: 0; color: #17211b; font-family: Arial, Helvetica, sans-serif; font-size: 11px; }
+            .header { display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 3px solid #16834a; padding-bottom: 14px; }
+            .brand { color: #147a43; font-size: 23px; font-weight: 800; letter-spacing: .5px; }
+            .subtitle { margin-top: 4px; color: #65736a; font-size: 11px; }
+            .doc-label { text-align: right; color: #34443a; font-size: 12px; font-weight: 700; }
+            h2 { margin: 18px 0 10px; font-size: 15px; }
+            .details { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 24px; padding: 13px; background: #f3f8f4; border: 1px solid #dce9df; border-radius: 7px; }
+            .label { color: #6b776f; font-size: 9px; text-transform: uppercase; letter-spacing: .5px; }
+            .value { margin-top: 3px; font-size: 11px; font-weight: 700; }
+            .summary { display: grid; grid-template-columns: repeat(3, 1fr); gap: 9px; margin: 14px 0; }
+            .stat { padding: 11px; border: 1px solid #e0e8e2; border-radius: 7px; }
+            .stat strong { display: block; margin-top: 5px; font-size: 17px; }
+            table { width: 100%; border-collapse: collapse; margin-top: 12px; }
+            th { padding: 9px 8px; text-align: left; background: #eaf3ed; color: #234b33; font-size: 10px; }
+            td { padding: 8px; border-bottom: 1px solid #e6ece8; vertical-align: top; line-height: 1.45; }
+            .taken { color: #147a43; font-weight: 700; }
+            .not-taken { color: #778078; }
+            .totals { width: 52%; margin: 16px 0 0 auto; }
+            .totals td { padding: 6px 8px; }
+            .grand td { border-top: 2px solid #16834a; font-size: 13px; font-weight: 800; }
+            .note { margin-top: 18px; color: #778078; font-size: 9px; }
+            .footer { margin-top: 24px; padding-top: 9px; border-top: 1px solid #e2e8e3; color: #78837b; font-size: 9px; text-align: center; }
+            @media print { body { -webkit-print-color-adjust: exact; print-color-adjust: exact; } }
+          </style>
+        </head>
+        <body>
+          <div class="header">
+            <div><div class="brand">LAZZAT TIFFIN</div><div class="subtitle">Customer Meal Record</div></div>
+            <div class="doc-label">MEAL HISTORY<br><span style="font-weight:400">Generated on ${new Date().toLocaleDateString("en-IN")}</span></div>
+          </div>
+          <h2>Customer Details</h2>
+          <div class="details">
+            <div><div class="label">Customer Name</div><div class="value">${escapeHtml(customer.name)}</div></div>
+            <div><div class="label">Phone</div><div class="value">${escapeHtml(customer.phone || "—")}</div></div>
+            <div><div class="label">Address</div><div class="value">${escapeHtml(customer.address || "—")}</div></div>
+            <div><div class="label">Selected Period</div><div class="value">${formatDate(historyRange.start)} to ${formatDate(historyRange.end)}</div></div>
+          </div>
+          <h2>Meal Summary</h2>
+          <div class="summary">
+            <div class="stat"><div class="label">Lunch Meals</div><strong>${historySummary.lunchCount}</strong><div>Rate: ${formatMoney(lunchRate)}</div></div>
+            <div class="stat"><div class="label">Dinner Meals</div><strong>${historySummary.dinnerCount}</strong><div>Rate: ${formatMoney(dinnerRate)}</div></div>
+            <div class="stat"><div class="label">Total Meals</div><strong>${historySummary.totalMeals}</strong><div>Combined amount: ${formatMoney(totalAmount)}</div></div>
+          </div>
+          <h2>Date-wise Attendance</h2>
+          <table>
+            <thead><tr><th style="width:25%">Date</th><th style="width:17%">Lunch</th><th style="width:17%">Dinner</th><th>Meal Feedback</th></tr></thead>
+            <tbody>${rows}</tbody>
+          </table>
+          <table class="totals">
+            <tbody>
+              <tr><td>Lunch: ${historySummary.lunchCount} × ${formatMoney(lunchRate)}</td><td style="text-align:right">${formatMoney(lunchAmount)}</td></tr>
+              <tr><td>Dinner: ${historySummary.dinnerCount} × ${formatMoney(dinnerRate)}</td><td style="text-align:right">${formatMoney(dinnerAmount)}</td></tr>
+              <tr class="grand"><td>Total Meal Amount</td><td style="text-align:right">${formatMoney(totalAmount)}</td></tr>
+            </tbody>
+          </table>
+          <div class="note">This report reflects attendance records available for the selected period. Amounts are calculated using the customer's current meal rates.</div>
+          <div class="footer">LAZZAT TIFFIN · Thank you for choosing us</div>
+          <script>window.onload = () => setTimeout(() => window.print(), 300);</script>
+        </body>
+      </html>
+    `);
+    printWindow.document.close();
+    setError("");
+  }
+
+  /* ================================================= */
   /* LOGOUT */
   /* ================================================= */
 
@@ -1414,12 +1536,23 @@ export default function CustomerDashboard() {
         {/* ================================================= */}
 
         <section className="mt-6 rounded-2xl bg-white p-6 shadow-sm">
-          <div>
-            <p className="text-sm font-semibold text-green-600">MEAL RECORD</p>
-            <h2 className="mt-1 text-2xl font-bold text-gray-900">Meal History</h2>
-            <p className="mt-1 text-sm text-gray-500">
-              Month select karein ya custom date range select karke apna meal record dekhein.
-            </p>
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+            <div>
+              <p className="text-sm font-semibold text-green-600">MEAL RECORD</p>
+              <h2 className="mt-1 text-2xl font-bold text-gray-900">Meal History</h2>
+              <p className="mt-1 text-sm text-gray-500">
+                Month select karein ya custom date range select karke apna meal record dekhein.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={downloadMealHistoryPdf}
+              disabled={!customer || filteredHistory.length === 0}
+              className="inline-flex shrink-0 items-center justify-center gap-2 rounded-xl bg-green-700 px-5 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-green-800 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              <span aria-hidden="true">↓</span>
+              Download PDF
+            </button>
           </div>
 
           <div className="mt-6 rounded-2xl border border-gray-200 bg-gray-50 p-5">
