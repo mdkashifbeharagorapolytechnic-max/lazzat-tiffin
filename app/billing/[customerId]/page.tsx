@@ -389,13 +389,15 @@ export default function BillingPage() {
 
             const lunchRate =
               Number(
-                customer.lunch_rate ||
+                existing?.lunch_rate ??
+                  customer.lunch_rate ??
                   0
               );
 
             const dinnerRate =
               Number(
-                customer.dinner_rate ||
+                existing?.dinner_rate ??
+                  customer.dinner_rate ??
                   0
               );
 
