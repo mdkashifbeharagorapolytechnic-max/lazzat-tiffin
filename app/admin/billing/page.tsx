@@ -142,6 +142,7 @@ function getStatus(
 export default function AdminBillingPage() {
   const [selectedMonth, setSelectedMonth] =
     useState(getCurrentMonth());
+  const [statusFilter, setStatusFilter] = useState<"all" | "pending" | "partial" | "paid">("all");
 
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [attendance, setAttendance] = useState<Attendance[]>([]);
@@ -364,6 +365,18 @@ export default function AdminBillingPage() {
     existingBilling,
     payments,
   ]);
+
+  const statusCounts = useMemo(() => ({
+    all: billingRows.length,
+    pending: billingRows.filter((row) => row.paymentStatus === "pending").length,
+    partial: billingRows.filter((row) => row.paymentStatus === "partial").length,
+    paid: billingRows.filter((row) => row.paymentStatus === "paid").length,
+  }), [billingRows]);
+
+  const visibleBillingRows = useMemo(
+    () => statusFilter === "all" ? billingRows : billingRows.filter((row) => row.paymentStatus === statusFilter),
+    [billingRows, statusFilter]
+  );
 
   const summary = useMemo(() => {
     return billingRows.reduce(
@@ -803,6 +816,36 @@ export default function AdminBillingPage() {
               Lunch and dinner charges are calculated from actual
               attendance.
             </p>
+            <div className="mt-3 flex flex-wrap items-center gap-2">
+              {([
+                ["all", "All"],
+                ["pending", "Pending"],
+                ["partial", "Partially Paid"],
+                ["paid", "Paid"],
+              ] as const).map(([value, label]) => {
+                const active = statusFilter === value;
+                const count = statusCounts[value];
+                const activeClass = value === "paid"
+                  ? "border-emerald-600 bg-emerald-600 text-white"
+                  : value === "partial"
+                  ? "border-amber-500 bg-amber-500 text-white"
+                  : value === "pending"
+                  ? "border-rose-600 bg-rose-600 text-white"
+                  : "border-slate-700 bg-slate-800 text-white";
+                return (
+                  <button
+                    key={value}
+                    type="button"
+                    onClick={() => setStatusFilter(value)}
+                    aria-pressed={active}
+                    className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-semibold transition ${active ? activeClass : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50"}`}
+                  >
+                    {label}
+                    <span className={`rounded-full px-1.5 py-0.5 text-[10px] ${active ? "bg-white/20 text-white" : "bg-slate-100 text-slate-500"}`}>{count}</span>
+                  </button>
+                );
+              })}
+            </div>
           </div>
 
           {billingRows.length === 0 ? (
@@ -814,6 +857,10 @@ export default function AdminBillingPage() {
               <p className="mt-1 text-sm text-slate-500">
                 Add an active customer to generate billing.
               </p>
+            </div>
+          ) : visibleBillingRows.length === 0 ? (
+            <div className="p-8 text-center text-sm text-slate-500">
+              Is status mein koi customer nahi hai.
             </div>
           ) : (
             <div className="overflow-x-auto">
@@ -879,7 +926,7 @@ export default function AdminBillingPage() {
                 </thead>
 
                 <tbody className="divide-y divide-slate-200">
-                  {billingRows.map((row) => (
+                  {visibleBillingRows.map((row) => (
                     <tr
                       key={row.customer.id}
                       className="transition hover:bg-slate-50"
