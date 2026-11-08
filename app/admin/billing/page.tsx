@@ -266,7 +266,15 @@ export default function AdminBillingPage() {
   }, [selectedMonth]);
 
   const billingRows = useMemo<BillingRow[]>(() => {
-    return customers.map((customer) => {
+    // Do not show a customer in billing months before their joining date.
+    // Customers without a saved start_date remain visible for legacy records.
+    return customers
+      .filter(
+        (customer) =>
+          !customer.start_date ||
+          customer.start_date < getNextMonthStart(selectedMonth)
+      )
+      .map((customer) => {
       const customerAttendance = attendance.filter(
         (item) => item.customer_id === customer.id
       );
