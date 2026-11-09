@@ -539,6 +539,73 @@ export default function AdminBillingPage() {
     }
   }
 
+  async function deleteEditedPayment() {
+    if (!editingPayment) return;
+
+    const confirmed = window.confirm(
+      "Kya aap is payment ko permanently delete karna chahte hain? Isse customer ka paid aur due amount bhi update ho jayega."
+    );
+    if (!confirmed) return;
+
+    try {
+      setSavingPaymentEdit(true);
+      setError("");
+      setSuccess("");
+
+      const paymentToDelete = editingPayment;
+      const { data: deletedPayment, error: deleteError } = await supabase
+        .from("payments")
+        .delete()
+        .eq("id", paymentToDelete.id)
+        .select("id")
+        .maybeSingle();
+
+      if (deleteError) throw deleteError;
+      if (!deletedPayment) {
+        throw new Error("Payment delete nahi hua. Admin permission check karein.");
+      }
+
+      if (paymentToDelete.billing_id) {
+        const { data: bill, error: billReadError } = await supabase
+          .from("billing")
+          .select("id,total_amount")
+          .eq("id", paymentToDelete.billing_id)
+          .single();
+        if (billReadError) throw billReadError;
+
+        const { data: billPayments, error: paymentsReadError } = await supabase
+          .from("payments")
+          .select("amount")
+          .eq("billing_id", paymentToDelete.billing_id);
+        if (paymentsReadError) throw paymentsReadError;
+
+        const paidAmount = (billPayments || []).reduce(
+          (sum, payment) => sum + Number(payment.amount || 0),
+          0
+        );
+        const totalAmount = Number(bill.total_amount || 0);
+        const { error: billUpdateError } = await supabase
+          .from("billing")
+          .update({
+            paid_amount: paidAmount,
+            due_amount: Math.max(totalAmount - paidAmount, 0),
+            payment_status: getStatus(totalAmount, paidAmount),
+          })
+          .eq("id", paymentToDelete.billing_id);
+        if (billUpdateError) throw billUpdateError;
+      }
+
+      setEditingPayment(null);
+      setSuccess("Payment delete ho gaya aur billing amount update ho gaya.");
+      await loadBillingData();
+    } catch (err: any) {
+      console.error("Delete billing payment error:", err);
+      setError(err?.message || "Payment delete nahi ho paya.");
+    } finally {
+      setSavingPaymentEdit(false);
+    }
+  }
+
   async function generateBill(row: BillingRow) {
     try {
       setGeneratingCustomer(row.customer.id);
@@ -763,6 +830,14 @@ export default function AdminBillingPage() {
                 </label>
               </div>
               <div className="mt-5 flex justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={deleteEditedPayment}
+                  disabled={savingPaymentEdit}
+                  className="mr-auto rounded-lg bg-red-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
+                >
+                  {savingPaymentEdit ? "Please wait..." : "Delete Payment"}
+                </button>
                 <button
                   type="button"
                   onClick={() => setEditingPayment(null)}
